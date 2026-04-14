@@ -8,4 +8,17 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <!-- liblouis DLL + 테이블 파일을 빌드 출력 폴더로 복사 -->
+  <ItemGroup>
+    <None Update="liblouis\README.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="liblouis\liblouis.dll" Condition="Exists('liblouis\liblouis.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="liblouis\tables\**\*" Condition="Exists('liblouis\tables')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

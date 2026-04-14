@@ -156,7 +156,11 @@ namespace BraillePrinter
                 dotCount:  manager.CurrentDotCoordinates.Count,
                 lineCount: usedLines);
 
-            StatusMessage.Text = $"변환 완료 — {manager.CurrentCells.Count}셀, {manager.CurrentDotCoordinates.Count}점";
+            // liblouis 사용 중 변환 실패 시 오류 표시
+            if (manager.ActiveConverter is Converters.LibLouisConverter llc && llc.LastError != null)
+                StatusMessage.Text = $"[liblouis 오류] {llc.LastError}";
+            else
+                StatusMessage.Text = $"변환 완료 [{manager.ActiveConverter.Name}] — {manager.CurrentCells.Count}셀, {manager.CurrentDotCoordinates.Count}점";
         }
 
         private void DrawCellGuides(BrailleParameters p, double scale)
@@ -227,7 +231,23 @@ namespace BraillePrinter
         private void UpdateStatusBar()
         {
             var p = ParameterManager.Instance.Parameters;
+
+            // ActiveConverter는 Convert() 호출 후에만 갱신되므로
+            // 상태바는 파라미터 설정값 + DLL 가용성으로 직접 판단한다
+            string engineLabel;
+            if (p.ConverterType == Models.ConverterType.LibLouis)
+            {
+                engineLabel = Converters.LibLouisConverter.Instance.IsAvailable
+                    ? $"liblouis [{p.LibLouisTable}]"
+                    : "Manual (liblouis DLL 없음)";
+            }
+            else
+            {
+                engineLabel = "Manual";
+            }
+
             StatusParams.Text =
+                $"엔진: {engineLabel}  │  " +
                 $"점간: {p.DotSpacing}mm  자간: {p.CellSpacing}mm  줄간: {p.LineSpacing}mm  " +
                 $"용지: {p.PaperWidth}×{p.PaperHeight}mm  한 줄 {p.MaxCellsPerLine}셀";
         }
