@@ -65,6 +65,21 @@ namespace BraillePrinter
             // 저장 시 ParameterManager.ParametersChanged 이벤트로 자동 처리
         }
 
+        private Views.LogWindow? _logWindow;
+
+        private void BtnLog_Click(object sender, RoutedEventArgs e)
+        {
+            // 이미 열려 있으면 앞으로 가져오기
+            if (_logWindow != null && _logWindow.IsLoaded)
+            {
+                _logWindow.Activate();
+                return;
+            }
+
+            _logWindow = new Views.LogWindow { Owner = this };
+            _logWindow.Show();
+        }
+
         // ── 텍스트 입력 이벤트 ───────────────────────────────────────────
 
         private void InputTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -121,8 +136,8 @@ namespace BraillePrinter
             var p       = ParameterManager.Instance.Parameters;
             double scale = p.DisplayScale;
 
-            // 점 크기: 실물 지름 1.5~1.6mm → 반지름 = DotSpacing * 0.28 (화면 가독성 확보)
-            double dotRadius = Math.Max(p.DotSpacing * 0.28 * scale, 2.5);
+            // 점 크기: 한국 점자 규격 점 지름 1.5mm → 반지름 0.75mm
+            double dotRadius = Math.Max(0.75 * scale, 2.0);
 
             // 셀 가이드 그리기 (옅은 격자)
             DrawCellGuides(p, scale);
@@ -165,33 +180,56 @@ namespace BraillePrinter
 
         private void DrawCellGuides(BrailleParameters p, double scale)
         {
-            var guideBrush = new SolidColorBrush(Color.FromArgb(30, 0, 100, 200));
+            var guideBrush   = new SolidColorBrush(Color.FromArgb(25, 0, 100, 200));
+            var dotAreaFill  = new SolidColorBrush(Color.FromArgb(4,  0, 80, 200));   // 거의 투명
+            var dotAreaStroke= new SolidColorBrush(Color.FromArgb(18, 0, 100, 200));  // 겨우 보일 정도
             int cellsPerLine = p.MaxCellsPerLine;
             int maxLines     = p.MaxLines;
+
+            // CalculateCoordinates와 완전히 동일한 기준점 사용
+            // (EffectiveMarginLeft/Top: 잔여 공간을 좌우·상하 균등 배분)
+            double padX = (p.CellSpacing - p.DotSpacing)      / 2.0;
+            double padY = (p.LineSpacing  - p.DotSpacing * 2) / 2.0;
 
             for (int row = 0; row < maxLines; row++)
             {
                 for (int col = 0; col < cellsPerLine; col++)
                 {
-                    double x = p.MarginLeft  * scale + col * p.CellSpacing * scale;
-                    double y = p.MarginTop   * scale + row * p.LineSpacing * scale;
+                    // EffectiveMarginLeft/Top → CalculateCoordinates의 cellX/cellY와 동기화
+                    double x = (p.EffectiveMarginLeft + col * p.CellSpacing) * scale;
+                    double y = (p.EffectiveMarginTop  + row * p.LineSpacing) * scale;
 
-                    // 셀 영역 표시 (너비: dotSpacing, 높이: dotSpacing*2)
-                    var rect = new Rectangle
+                    // ── 셀 전체 경계 (CellSpacing × LineSpacing) ──
+                    var cellRect = new Rectangle
                     {
-                        Width           = p.DotSpacing * scale * 2 + p.DotSpacing * scale * 0.2,
-                        Height          = p.DotSpacing * scale * 2,
+                        Width           = p.CellSpacing * scale,
+                        Height          = p.LineSpacing * scale,
                         Stroke          = guideBrush,
                         StrokeThickness = 0.5,
                         Fill            = Brushes.Transparent,
                     };
+                    Canvas.SetLeft(cellRect, x);
+                    Canvas.SetTop (cellRect, y);
+                    BrailleCanvas.Children.Add(cellRect);
 
-                    Canvas.SetLeft(rect, x - p.DotSpacing * scale * 0.1);
-                    Canvas.SetTop(rect, y);
-                    BrailleCanvas.Children.Add(rect);
+                    // ── 실제 점 영역 — 보일랑 말랑 (alpha 극히 낮음) ──
+                    var dotAreaRect = new Rectangle
+                    {
+                        Width           = p.DotSpacing * scale,
+                        Height          = p.DotSpacing * 2 * scale,
+                        Stroke          = dotAreaStroke,
+                        StrokeThickness = 0.5,
+                        StrokeDashArray = new DoubleCollection { 2, 3 },
+                        Fill            = dotAreaFill,
+                    };
+                    Canvas.SetLeft(dotAreaRect, x + padX * scale);
+                    Canvas.SetTop (dotAreaRect, y + padY * scale);
+                    BrailleCanvas.Children.Add(dotAreaRect);
                 }
             }
         }
+
+
 
         // ── 캔버스 크기 적용 ─────────────────────────────────────────────
 

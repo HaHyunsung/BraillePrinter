@@ -52,7 +52,7 @@ namespace BraillePrinter.Models
         // ── 변환 엔진 설정 ────────────────────────────────────────────────
 
         /// <summary>사용할 변환 엔진 (Manual / LibLouis)</summary>
-        [XmlElement] public ConverterType ConverterType { get; set; } = ConverterType.Manual;
+        [XmlElement] public ConverterType ConverterType { get; set; } = ConverterType.LibLouis;
 
         /// <summary>
         /// LibLouis 엔진 사용 시 테이블 파일명.
@@ -72,5 +72,19 @@ namespace BraillePrinter.Models
 
         [XmlIgnore]
         public int TotalCapacity => MaxCellsPerLine * MaxLines;
+
+        // ── 균등 여백 (좌우·상하 대칭) ───────────────────────────────────────
+        // MaxCellsPerLine은 정수 절삭으로 인해 우/하단에 잉여 공간이 생깁니다.
+        // Effective 여백은 전체 점자 영역을 용지 중앙에 배치하여 좌=우, 상=하 를 보장합니다.
+
+        /// <summary>실제 좌측 여백 (좌우 균등 배분 후, mm)</summary>
+        [XmlIgnore]
+        public double EffectiveMarginLeft =>
+            (PaperWidth - MaxCellsPerLine * CellSpacing) / 2.0;
+
+        /// <summary>실제 상단 여백 (상하 균등 배분 후, mm)</summary>
+        [XmlIgnore]
+        public double EffectiveMarginTop =>
+            (PaperHeight - MaxLines * LineSpacing) / 2.0;
     }
 }

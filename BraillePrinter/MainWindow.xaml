@@ -73,6 +73,13 @@
 
                 <Rectangle Width="1" Height="22" Fill="#CCCCCC" Margin="8,0"/>
 
+                <Button x:Name="BtnLog"
+                        Style="{StaticResource ToolBtn}"
+                        Content="📋  로그"
+                        Click="BtnLog_Click"/>
+
+                <Rectangle Width="1" Height="22" Fill="#CCCCCC" Margin="8,0"/>
+
                 <!-- 인쇄 버튼 (하드웨어 미확정 — 비활성) -->
                 <Button x:Name="BtnPrint"
                         Style="{StaticResource ToolBtn}"

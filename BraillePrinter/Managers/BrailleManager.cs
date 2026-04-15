@@ -130,23 +130,33 @@ namespace BraillePrinter.Managers
             var p    = ParameterManager.Instance.Parameters;
             var dots = new List<DotCoordinate>();
 
+            // 셀 내 점 배열 중앙 정렬 오프셋 (mm)
+            // 점 배열 영역: 너비 = DotSpacing (점1~점4 수평), 높이 = DotSpacing×2 (점1~점3 수직)
+            // 이 오프셋을 적용해도 인접 셀의 동일 번호 점 간 거리는 CellSpacing 그대로 유지됨
+            double dotAreaW = p.DotSpacing;         // 좌열↔우열 중심 간 거리
+            double dotAreaH = p.DotSpacing * 2;     // 점1↔점3 중심 간 거리
+            double padX     = (p.CellSpacing - dotAreaW) / 2.0;  // 수평 여백 = (6.0-2.5)/2 = 1.75mm
+            double padY     = (p.LineSpacing - dotAreaH) / 2.0;  // 수직 여백 = (10.0-5.0)/2 = 2.5mm
+
             foreach (var cell in cells)
             {
-                // 셀 기준점 (점1의 절대 좌표, mm)
-                double cellX = p.MarginLeft + cell.Column * p.CellSpacing;
-                double cellY = p.MarginTop  + cell.Row    * p.LineSpacing;
+            // 셀 기준점 (용지 좌상단 기준 절대 mm 좌표)
+                // EffectiveMarginLeft/Top: 소수점 절삭된 잔류 공간을 좌우·상하에 균등 배분
+                double cellX = p.EffectiveMarginLeft + cell.Column * p.CellSpacing;
+                double cellY = p.EffectiveMarginTop  + cell.Row    * p.LineSpacing;
 
                 for (int dotNum = 1; dotNum <= 6; dotNum++)
                 {
                     if (!cell.HasDot(dotNum)) continue;
 
-                    // 점 배치: 1,2,3=왼쪽열 / 4,5,6=오른쪽열
-                    double offsetX = (dotNum <= 3) ? 0.0 : p.DotSpacing;
-                    double offsetY = ((dotNum - 1) % 3) * p.DotSpacing;
+                    // 점 배치: 1,2,3 = 좌측 열 / 4,5,6 = 우측 열
+                    // padX/padY로 셀 중앙 정렬
+                    double dotX = cellX + padX + ((dotNum <= 3) ? 0.0 : p.DotSpacing);
+                    double dotY = cellY + padY + ((dotNum - 1) % 3) * p.DotSpacing;
 
                     dots.Add(new DotCoordinate(
-                        x:          cellX + offsetX,
-                        y:          cellY + offsetY,
+                        x:          dotX,
+                        y:          dotY,
                         cellColumn: cell.Column,
                         cellRow:    cell.Row,
                         dotNumber:  dotNum));
@@ -155,5 +165,6 @@ namespace BraillePrinter.Managers
 
             return dots;
         }
+
     }
 }
