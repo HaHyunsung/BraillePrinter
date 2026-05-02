@@ -5,22 +5,24 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using BraillePrinter.Managers;
 using BraillePrinter.Models;
+using BraillePrinter.Services;
 using BraillePrinter.Views;
 
 namespace BraillePrinter
 {
     public partial class MainWindow : Window
     {
-        // 텍스트 변경 후 자동 변환 딜레이 (ms)
         private const int AutoConvertDelayMs = 500;
 
         private readonly DispatcherTimer _convertTimer;
+        private readonly GrblService _grbl = GrblService.Instance;
+        private List<string> _currentGCode = new();
+        private bool _isReverting;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            // 자동 변환 타이머 설정
             _convertTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromMilliseconds(AutoConvertDelayMs)
@@ -31,18 +33,20 @@ namespace BraillePrinter
                 RunConvert();
             };
 
-            // 파라미터 변경 시 자동 재변환
             ParameterManager.Instance.ParametersChanged += OnParametersChanged;
-
-            // 점자 변환 완료 시 캔버스 갱신
             BrailleManager.Instance.BrailleUpdated += OnBrailleUpdated;
 
-            // 초기 캔버스 크기 및 상태바 표시
+            _grbl.StateChanged += OnGrblStateChanged;
+            _grbl.LineReceived += OnGrblLineReceived;
+            _grbl.LineSent += OnGrblLineSent;
+            _grbl.ErrorOccurred += OnGrblError;
+
             ApplyCanvasSize();
             UpdateStatusBar();
+            RefreshPorts();
         }
 
-        // ── 툴바 이벤트 ──────────────────────────────────────────────────
+        // ── 툴바 이벤트 ──────────────────────────────────────
 
         private void BtnConvert_Click(object sender, RoutedEventArgs e)
         {
@@ -52,8 +56,14 @@ namespace BraillePrinter
 
         private void BtnClear_Click(object sender, RoutedEventArgs e)
         {
+            _isReverting = true;
             InputTextBox.Clear();
+            _isReverting = false;
             BrailleCanvas.Children.Clear();
+            PathCanvas.Children.Clear();
+            TxtGCode.Clear();
+            TxtCoordinates.Clear();
+            _currentGCode.Clear();
             UpdateInfoPanel(0, 0, 0, 0);
             StatusMessage.Text = "지워졌습니다.";
         }
@@ -62,28 +72,28 @@ namespace BraillePrinter
         {
             var win = new ParameterWindow { Owner = this };
             win.ShowDialog();
-            // 저장 시 ParameterManager.ParametersChanged 이벤트로 자동 처리
         }
 
-        private Views.LogWindow? _logWindow;
+        private LogWindow? _logWindow;
 
         private void BtnLog_Click(object sender, RoutedEventArgs e)
         {
-            // 이미 열려 있으면 앞으로 가져오기
             if (_logWindow != null && _logWindow.IsLoaded)
             {
                 _logWindow.Activate();
                 return;
             }
 
-            _logWindow = new Views.LogWindow { Owner = this };
+            _logWindow = new LogWindow { Owner = this };
             _logWindow.Show();
         }
 
-        // ── 텍스트 입력 이벤트 ───────────────────────────────────────────
+        // ── 텍스트 입력 ──────────────────────────────────────
 
         private void InputTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (_isReverting) return;
+
             _convertTimer.Stop();
             _convertTimer.Start();
 
@@ -91,7 +101,7 @@ namespace BraillePrinter
             UpdateInfoPanel(len, 0, 0, 0);
         }
 
-        // ── 변환 및 렌더링 ────────────────────────────────────────────────
+        // ── 변환 및 렌더링 ───────────────────────────────────
 
         private void RunConvert()
         {
@@ -100,6 +110,10 @@ namespace BraillePrinter
             if (string.IsNullOrWhiteSpace(text))
             {
                 BrailleCanvas.Children.Clear();
+                PathCanvas.Children.Clear();
+                TxtGCode.Clear();
+                TxtCoordinates.Clear();
+                _currentGCode.Clear();
                 UpdateInfoPanel(0, 0, 0, 0);
                 StatusMessage.Text = "텍스트를 입력하세요.";
                 return;
@@ -107,12 +121,10 @@ namespace BraillePrinter
 
             StatusMessage.Text = "변환 중...";
             BrailleManager.Instance.Convert(text);
-            // 렌더링은 BrailleUpdated 이벤트에서 처리
         }
 
         private void OnBrailleUpdated()
         {
-            // BrailleManager 이벤트는 비-UI 스레드에서도 올 수 있으므로 Dispatcher 사용
             Dispatcher.InvokeAsync(RenderBraille);
         }
 
@@ -126,23 +138,36 @@ namespace BraillePrinter
             });
         }
 
-        // ── 캔버스 렌더링 ────────────────────────────────────────────────
+        // ── 캔버스 렌더링 ────────────────────────────────────
 
         private void RenderBraille()
         {
+            var manager = BrailleManager.Instance;
+
+            if (manager.IsOverflow)
+            {
+                string truncated = FindMaxFitText(InputTextBox.Text);
+
+                _isReverting = true;
+                InputTextBox.Text = truncated;
+                InputTextBox.CaretIndex = truncated.Length;
+                _isReverting = false;
+
+                StatusMessage.Text = $"용지가 꽉 찼습니다. 초과 내용을 잘라냈습니다 ({truncated.Length}자).";
+
+                BrailleManager.Instance.Convert(truncated);
+                return;
+            }
+
             BrailleCanvas.Children.Clear();
 
-            var manager = BrailleManager.Instance;
-            var p       = ParameterManager.Instance.Parameters;
+            var p = ParameterManager.Instance.Parameters;
             double scale = p.DisplayScale;
 
-            // 점 크기: 한국 점자 규격 점 지름 1.5mm → 반지름 0.75mm
             double dotRadius = Math.Max(0.75 * scale, 2.0);
 
-            // 셀 가이드 그리기 (옅은 격자)
             DrawCellGuides(p, scale);
 
-            // 점 그리기
             foreach (var dot in manager.CurrentDotCoordinates)
             {
                 double cx = dot.X * scale;
@@ -150,9 +175,9 @@ namespace BraillePrinter
 
                 var ellipse = new Ellipse
                 {
-                    Width  = dotRadius * 2,
+                    Width = dotRadius * 2,
                     Height = dotRadius * 2,
-                    Fill   = Brushes.DimGray,
+                    Fill = Brushes.DimGray,
                 };
 
                 Canvas.SetLeft(ellipse, cx - dotRadius);
@@ -160,7 +185,12 @@ namespace BraillePrinter
                 BrailleCanvas.Children.Add(ellipse);
             }
 
-            // 정보 패널 갱신
+            _currentGCode = GCodeGenerator.Generate(manager.CurrentDotCoordinates);
+            TxtGCode.Text = GCodeGenerator.GenerateText(manager.CurrentDotCoordinates);
+            TxtCoordinates.Text = GCodeGenerator.FormatCoordinateTable(manager.CurrentDotCoordinates);
+
+            RenderPathPreview(manager.CurrentDotCoordinates, p, scale, dotRadius);
+
             int usedLines = manager.CurrentCells.Count > 0
                 ? manager.CurrentCells.Max(c => c.Row) + 1
                 : 0;
@@ -168,82 +198,170 @@ namespace BraillePrinter
             UpdateInfoPanel(
                 charCount: InputTextBox.Text.Length,
                 cellCount: manager.CurrentCells.Count,
-                dotCount:  manager.CurrentDotCoordinates.Count,
+                dotCount: manager.CurrentDotCoordinates.Count,
                 lineCount: usedLines);
 
-            // liblouis 사용 중 변환 실패 시 오류 표시
             if (manager.ActiveConverter is Converters.LibLouisConverter llc && llc.LastError != null)
                 StatusMessage.Text = $"[liblouis 오류] {llc.LastError}";
             else
-                StatusMessage.Text = $"변환 완료 [{manager.ActiveConverter.Name}] — {manager.CurrentCells.Count}셀, {manager.CurrentDotCoordinates.Count}점";
+                StatusMessage.Text = $"변환 완료 [{manager.ActiveConverter.Name}] — {manager.CurrentCells.Count}셀, {manager.CurrentDotCoordinates.Count}점, G-Code {_currentGCode.Count}줄";
+
+            UpdatePrintButtonState();
         }
 
-        private void DrawCellGuides(BrailleParameters p, double scale)
+        private void DrawCellGuides(BrailleParameters p, double scale, Canvas? target = null)
         {
-            var guideBrush   = new SolidColorBrush(Color.FromArgb(25, 0, 100, 200));
-            var dotAreaFill  = new SolidColorBrush(Color.FromArgb(4,  0, 80, 200));   // 거의 투명
-            var dotAreaStroke= new SolidColorBrush(Color.FromArgb(18, 0, 100, 200));  // 겨우 보일 정도
-            int cellsPerLine = p.MaxCellsPerLine;
-            int maxLines     = p.MaxLines;
+            target ??= BrailleCanvas;
 
-            // CalculateCoordinates와 완전히 동일한 기준점 사용
-            // (EffectiveMarginLeft/Top: 잔여 공간을 좌우·상하 균등 배분)
-            double padX = (p.CellSpacing - p.DotSpacing)      / 2.0;
-            double padY = (p.LineSpacing  - p.DotSpacing * 2) / 2.0;
+            var guideBrush = new SolidColorBrush(Color.FromArgb(25, 0, 100, 200));
+            var dotAreaFill = new SolidColorBrush(Color.FromArgb(4, 0, 80, 200));
+            var dotAreaStroke = new SolidColorBrush(Color.FromArgb(18, 0, 100, 200));
+            int cellsPerLine = p.MaxCellsPerLine;
+            int maxLines = p.MaxLines;
+
+            double padX = (p.CellSpacing - p.DotSpacing) / 2.0;
+            double padY = (p.LineSpacing - p.DotSpacing * 2) / 2.0;
 
             for (int row = 0; row < maxLines; row++)
             {
                 for (int col = 0; col < cellsPerLine; col++)
                 {
-                    // EffectiveMarginLeft/Top → CalculateCoordinates의 cellX/cellY와 동기화
                     double x = (p.EffectiveMarginLeft + col * p.CellSpacing) * scale;
-                    double y = (p.EffectiveMarginTop  + row * p.LineSpacing) * scale;
+                    double y = (p.EffectiveMarginTop + row * p.LineSpacing) * scale;
 
-                    // ── 셀 전체 경계 (CellSpacing × LineSpacing) ──
                     var cellRect = new Rectangle
                     {
-                        Width           = p.CellSpacing * scale,
-                        Height          = p.LineSpacing * scale,
-                        Stroke          = guideBrush,
+                        Width = p.CellSpacing * scale,
+                        Height = p.LineSpacing * scale,
+                        Stroke = guideBrush,
                         StrokeThickness = 0.5,
-                        Fill            = Brushes.Transparent,
+                        Fill = Brushes.Transparent,
                     };
                     Canvas.SetLeft(cellRect, x);
-                    Canvas.SetTop (cellRect, y);
-                    BrailleCanvas.Children.Add(cellRect);
+                    Canvas.SetTop(cellRect, y);
+                    target.Children.Add(cellRect);
 
-                    // ── 실제 점 영역 — 보일랑 말랑 (alpha 극히 낮음) ──
                     var dotAreaRect = new Rectangle
                     {
-                        Width           = p.DotSpacing * scale,
-                        Height          = p.DotSpacing * 2 * scale,
-                        Stroke          = dotAreaStroke,
+                        Width = p.DotSpacing * scale,
+                        Height = p.DotSpacing * 2 * scale,
+                        Stroke = dotAreaStroke,
                         StrokeThickness = 0.5,
                         StrokeDashArray = new DoubleCollection { 2, 3 },
-                        Fill            = dotAreaFill,
+                        Fill = dotAreaFill,
                     };
                     Canvas.SetLeft(dotAreaRect, x + padX * scale);
-                    Canvas.SetTop (dotAreaRect, y + padY * scale);
-                    BrailleCanvas.Children.Add(dotAreaRect);
+                    Canvas.SetTop(dotAreaRect, y + padY * scale);
+                    target.Children.Add(dotAreaRect);
                 }
             }
         }
 
+        private void RenderPathPreview(IReadOnlyList<DotCoordinate> dots,
+                                       BrailleParameters p, double scale, double dotRadius)
+        {
+            PathCanvas.Children.Clear();
+            PathCanvas.Width = p.PaperWidth * scale;
+            PathCanvas.Height = p.PaperHeight * scale;
 
+            DrawCellGuides(p, scale, PathCanvas);
 
-        // ── 캔버스 크기 적용 ─────────────────────────────────────────────
+            foreach (var dot in dots)
+            {
+                var ellipse = new Ellipse
+                {
+                    Width = dotRadius * 2,
+                    Height = dotRadius * 2,
+                    Fill = Brushes.DimGray,
+                };
+                Canvas.SetLeft(ellipse, dot.X * scale - dotRadius);
+                Canvas.SetTop(ellipse, dot.Y * scale - dotRadius);
+                PathCanvas.Children.Add(ellipse);
+            }
+
+            var zigzag = GCodeGenerator.BuildZigzagOrder(dots);
+            if (zigzag.Count == 0) return;
+
+            var pathBrush = new SolidColorBrush(Color.FromArgb(140, 220, 50, 50));
+
+            double prevX = zigzag[0].X * scale;
+            double prevY = zigzag[0].Y * scale;
+
+            for (int i = 1; i < zigzag.Count; i++)
+            {
+                double cx = zigzag[i].X * scale;
+                double cy = zigzag[i].Y * scale;
+
+                PathCanvas.Children.Add(new Line
+                {
+                    X1 = prevX, Y1 = prevY,
+                    X2 = cx, Y2 = cy,
+                    Stroke = pathBrush,
+                    StrokeThickness = 1.0,
+                });
+
+                prevX = cx;
+                prevY = cy;
+            }
+        }
+
+        private static string FindMaxFitText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            if (!BrailleManager.Instance.TestOverflow(text)) return text;
+
+            int lo = 0, hi = text.Length - 1;
+            while (lo < hi)
+            {
+                int mid = (lo + hi + 1) / 2;
+                if (BrailleManager.Instance.TestOverflow(text[..mid]))
+                    hi = mid - 1;
+                else
+                    lo = mid;
+            }
+            return text[..lo];
+        }
+
+        // ── 확대/축소 ────────────────────────────────────────
+
+        private void OnPreviewZoom(object sender, System.Windows.Input.MouseWheelEventArgs e)
+        {
+            if (!System.Windows.Input.Keyboard.IsKeyDown(System.Windows.Input.Key.LeftCtrl) &&
+                !System.Windows.Input.Keyboard.IsKeyDown(System.Windows.Input.Key.RightCtrl))
+                return;
+
+            e.Handled = true;
+
+            double delta = e.Delta > 0 ? 1.15 : 1.0 / 1.15;
+
+            if (sender == BrailleScrollViewer)
+                ApplyZoom(BrailleScale, delta);
+            else if (sender == PathScrollViewer)
+                ApplyZoom(PathScale, delta);
+        }
+
+        private static void ApplyZoom(ScaleTransform scale, double factor)
+        {
+            const double min = 0.3, max = 5.0;
+            double next = scale.ScaleX * factor;
+            next = Math.Max(min, Math.Min(max, next));
+            scale.ScaleX = next;
+            scale.ScaleY = next;
+        }
+
+        // ── 캔버스 크기 ──────────────────────────────────────
 
         private void ApplyCanvasSize()
         {
             var p = ParameterManager.Instance.Parameters;
-            double w = p.PaperWidth  * p.DisplayScale;
+            double w = p.PaperWidth * p.DisplayScale;
             double h = p.PaperHeight * p.DisplayScale;
 
-            BrailleCanvas.Width  = w;
+            BrailleCanvas.Width = w;
             BrailleCanvas.Height = h;
         }
 
-        // ── 정보 패널 갱신 ────────────────────────────────────────────────
+        // ── 정보 패널 ────────────────────────────────────────
 
         private void UpdateInfoPanel(int charCount, int cellCount, int dotCount, int lineCount)
         {
@@ -251,14 +369,15 @@ namespace BraillePrinter
 
             InfoCharCount.Text = charCount.ToString();
             InfoCellCount.Text = cellCount.ToString();
-            InfoDotCount.Text  = dotCount.ToString();
+            InfoDotCount.Text = dotCount.ToString();
             InfoLineCount.Text = lineCount.ToString();
-            InfoCapacity.Text  = $"{cellCount} / {p.TotalCapacity}";
+            InfoCapacity.Text = $"{cellCount} / {p.TotalCapacity}";
+            InfoGCodeLines.Text = _currentGCode.Count.ToString();
 
             if (cellCount > p.TotalCapacity && p.TotalCapacity > 0)
             {
                 InfoCapacity.Foreground = Brushes.Red;
-                StatusMessage.Text = $"⚠ 셀 용량 초과! ({cellCount}/{p.TotalCapacity})";
+                StatusMessage.Text = $"셀 용량 초과! ({cellCount}/{p.TotalCapacity})";
             }
             else
             {
@@ -270,10 +389,8 @@ namespace BraillePrinter
         {
             var p = ParameterManager.Instance.Parameters;
 
-            // ActiveConverter는 Convert() 호출 후에만 갱신되므로
-            // 상태바는 파라미터 설정값 + DLL 가용성으로 직접 판단한다
             string engineLabel;
-            if (p.ConverterType == Models.ConverterType.LibLouis)
+            if (p.ConverterType == ConverterType.LibLouis)
             {
                 engineLabel = Converters.LibLouisConverter.Instance.IsAvailable
                     ? $"liblouis [{p.LibLouisTable}]"
@@ -285,9 +402,238 @@ namespace BraillePrinter
             }
 
             StatusParams.Text =
-                $"엔진: {engineLabel}  │  " +
+                $"엔진: {engineLabel}  |  " +
                 $"점간: {p.DotSpacing}mm  자간: {p.CellSpacing}mm  줄간: {p.LineSpacing}mm  " +
-                $"용지: {p.PaperWidth}×{p.PaperHeight}mm  한 줄 {p.MaxCellsPerLine}셀";
+                $"용지: {p.PaperWidth}x{p.PaperHeight}mm  한 줄 {p.MaxCellsPerLine}셀";
+        }
+
+        // ── 탭 복사 버튼 ─────────────────────────────────────
+
+        private void BtnCopyGCode_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.IsNullOrEmpty(TxtGCode.Text))
+            {
+                Clipboard.SetText(TxtGCode.Text);
+                StatusMessage.Text = "G-Code가 클립보드에 복사되었습니다.";
+            }
+        }
+
+        private void BtnCopyCoords_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.IsNullOrEmpty(TxtCoordinates.Text))
+            {
+                Clipboard.SetText(TxtCoordinates.Text);
+                StatusMessage.Text = "좌표 테이블이 클립보드에 복사되었습니다.";
+            }
+        }
+
+        private void BtnClearSerialLog_Click(object sender, RoutedEventArgs e)
+        {
+            TxtSerialLog.Clear();
+        }
+
+        // ══════════════════════════════════════════════════════
+        //  시리얼 통신 / GRBL
+        // ══════════════════════════════════════════════════════
+
+        private void RefreshPorts()
+        {
+            CmbPort.Items.Clear();
+            foreach (var port in GrblService.GetAvailablePorts())
+                CmbPort.Items.Add(port);
+            if (CmbPort.Items.Count > 0)
+                CmbPort.SelectedIndex = 0;
+        }
+
+        private void BtnRefreshPorts_Click(object sender, RoutedEventArgs e)
+        {
+            RefreshPorts();
+        }
+
+        private void BtnConnect_Click(object sender, RoutedEventArgs e)
+        {
+            if (_grbl.IsConnected)
+            {
+                _grbl.Disconnect();
+                BtnConnect.Content = "연결";
+                BtnConnect.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#388E3C"));
+                StatusMessage.Text = "연결 해제됨";
+                return;
+            }
+
+            if (CmbPort.SelectedItem is not string portName)
+            {
+                StatusMessage.Text = "COM 포트를 선택하세요.";
+                return;
+            }
+
+            StatusMessage.Text = $"{portName} 연결 중...";
+
+            if (_grbl.Connect(portName))
+            {
+                BtnConnect.Content = "연결 해제";
+                BtnConnect.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#757575"));
+                StatusMessage.Text = $"{portName} 연결됨 — HOME을 실행하세요.";
+            }
+        }
+
+        private void OnGrblStateChanged(GrblState state)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                TxtGrblState.Text = state.ToString();
+
+                StateIndicator.Background = state switch
+                {
+                    GrblState.Idle => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#388E3C")),
+                    GrblState.Run => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1565C0")),
+                    GrblState.Hold => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F57C00")),
+                    GrblState.Alarm => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D32F2F")),
+                    GrblState.Home => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7B1FA2")),
+                    _ => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#9E9E9E")),
+                };
+
+                string[] parts = _grbl.MachinePosition.Split(',');
+                if (parts.Length >= 2)
+                    TxtMachinePos.Text = $"X:{parts[0]}  Y:{parts[1]}";
+
+                BtnHome.IsEnabled = _grbl.IsConnected && state != GrblState.Run;
+                TxtHomedStatus.Text = _grbl.IsHomed ? "[HOME 완료]" : "[HOME 필요]";
+                TxtHomedStatus.Foreground = _grbl.IsHomed
+                    ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#388E3C"))
+                    : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D32F2F"));
+
+                UpdatePrintButtonState();
+            });
+        }
+
+        private void UpdatePrintButtonState()
+        {
+            BtnPrint.IsEnabled = _grbl.IsConnected
+                                 && _grbl.IsHomed
+                                 && _grbl.State == GrblState.Idle
+                                 && _currentGCode.Count > 0;
+        }
+
+        private void OnGrblLineReceived(string line)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                AppendSerialLog($"<< {line}");
+            });
+        }
+
+        private void OnGrblLineSent(string line)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                AppendSerialLog($">> {line}");
+            });
+        }
+
+        private void OnGrblError(string msg)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                AppendSerialLog($"[ERROR] {msg}");
+                StatusMessage.Text = msg;
+            });
+        }
+
+        private void AppendSerialLog(string text)
+        {
+            TxtSerialLog.AppendText($"[{DateTime.Now:HH:mm:ss.fff}] {text}\n");
+            TxtSerialLog.ScrollToEnd();
+        }
+
+        // ── Home ─────────────────────────────────────────────
+
+        private async void BtnHome_Click(object sender, RoutedEventArgs e)
+        {
+            BtnHome.IsEnabled = false;
+            BtnPrint.IsEnabled = false;
+            StatusMessage.Text = "홈잉 중... (리밋 스위치 탐색)";
+
+            bool success = await _grbl.HomeAsync();
+
+            if (success)
+            {
+                StatusMessage.Text = "홈잉 완료 — 인쇄 준비됨";
+            }
+            else
+            {
+                StatusMessage.Text = "홈잉 실패 — 상태를 확인하세요.";
+            }
+
+            BtnHome.IsEnabled = _grbl.IsConnected;
+            UpdatePrintButtonState();
+        }
+
+        // ── Print ────────────────────────────────────────────
+
+        private async void BtnPrint_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentGCode.Count == 0)
+            {
+                StatusMessage.Text = "변환된 G-Code가 없습니다.";
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"총 {_currentGCode.Count}줄의 G-Code를 전송합니다.\n" +
+                $"펀칭 점 수: {BrailleManager.Instance.CurrentDotCoordinates.Count}\n\n" +
+                "인쇄를 시작할까요?",
+                "인쇄 확인",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes) return;
+
+            BtnPrint.IsEnabled = false;
+            BtnHome.IsEnabled = false;
+            BtnStop.IsEnabled = true;
+            BtnConvert.IsEnabled = false;
+
+            JobProgress.Visibility = Visibility.Visible;
+            JobProgress.Maximum = _currentGCode.Count;
+            JobProgress.Value = 0;
+
+            var progress = new Progress<int>(lineNum =>
+            {
+                JobProgress.Value = lineNum;
+                TxtJobProgress.Text = $"{lineNum}/{_currentGCode.Count}";
+            });
+
+            StatusMessage.Text = "인쇄 중...";
+
+            bool success = await _grbl.RunJobAsync(_currentGCode, progress);
+
+            JobProgress.Visibility = Visibility.Collapsed;
+            TxtJobProgress.Text = "";
+            BtnStop.IsEnabled = false;
+            BtnConvert.IsEnabled = true;
+            BtnHome.IsEnabled = _grbl.IsConnected;
+
+            StatusMessage.Text = success
+                ? "인쇄 완료!"
+                : "인쇄 중단됨 — 상태를 확인하세요.";
+
+            UpdatePrintButtonState();
+        }
+
+        private void BtnStop_Click(object sender, RoutedEventArgs e)
+        {
+            _grbl.CancelJob();
+            BtnStop.IsEnabled = false;
+            StatusMessage.Text = "정지 명령 전송됨 (Soft Reset)";
+        }
+
+        // ── Window close cleanup ─────────────────────────────
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _grbl.Dispose();
+            base.OnClosed(e);
         }
     }
 }

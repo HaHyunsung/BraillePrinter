@@ -35,12 +35,26 @@ namespace BraillePrinter.Managers
         public IReadOnlyList<DotCoordinate> CurrentDotCoordinates { get; private set; }
             = Array.Empty<DotCoordinate>();
 
+        public bool IsOverflow { get; private set; }
+
         /// <summary>변환 완료 시 발생합니다.</summary>
         public event Action? BrailleUpdated;
 
         private BrailleManager() { }
 
         // ── 공개 API ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// 변환만 수행하고 오버플로 여부만 반환합니다 (이벤트 미발생).
+        /// 이진탐색 등 반복 호출 용도로 사용하세요.
+        /// </summary>
+        public bool TestOverflow(string text)
+        {
+            var converter = ResolveConverter();
+            var patterns  = converter.Convert(text);
+            var (_, overflow) = LayoutCells(patterns);
+            return overflow;
+        }
 
         /// <summary>텍스트를 점자로 변환하고 CurrentCells / CurrentDotCoordinates를 갱신합니다.</summary>
         public void Convert(string text)
@@ -52,7 +66,8 @@ namespace BraillePrinter.Managers
             var patterns = ActiveConverter.Convert(text);
 
             // 2단계: 레이아웃 (셀 위치 배정)
-            var cells = LayoutCells(patterns);
+            var (cells, overflow) = LayoutCells(patterns);
+            IsOverflow = overflow;
             CurrentCells = cells.AsReadOnly();
 
             // 3단계: 물리 좌표 계산
@@ -86,11 +101,13 @@ namespace BraillePrinter.Managers
 
         // ── 레이아웃 (패턴 → 셀 위치 배정) ─────────────────────────────
 
-        private static List<BrailleCell> LayoutCells(List<byte> patterns)
+        private static (List<BrailleCell> cells, bool overflow) LayoutCells(List<byte> patterns)
         {
             var p            = ParameterManager.Instance.Parameters;
             int cellsPerLine = p.MaxCellsPerLine;
+            int maxLines     = p.MaxLines;
             int col = 0, row = 0;
+            bool overflow = false;
             var cells = new List<BrailleCell>();
 
             foreach (byte pattern in patterns)
@@ -99,6 +116,7 @@ namespace BraillePrinter.Managers
                 {
                     col = 0;
                     row++;
+                    if (row >= maxLines) { overflow = true; break; }
                     continue;
                 }
 
@@ -109,6 +127,7 @@ namespace BraillePrinter.Managers
                 {
                     col = 0;
                     row++;
+                    if (row >= maxLines) { overflow = true; break; }
                 }
 
                 cells.Add(new BrailleCell
@@ -120,7 +139,7 @@ namespace BraillePrinter.Managers
                 col++;
             }
 
-            return cells;
+            return (cells, overflow);
         }
 
         // ── 물리 좌표 계산 ────────────────────────────────────────────────

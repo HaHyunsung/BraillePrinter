@@ -49,6 +49,14 @@ namespace BraillePrinter.Models
         /// <summary>화면 표시 배율 (px/mm)</summary>
         [XmlElement] public double DisplayScale { get; set; } = 2.5;
 
+        // ── G-Code 출력 설정 ─────────────────────────────────────────────
+
+        /// <summary>급속이동 속도 (mm/min) — G0 F 값</summary>
+        [XmlElement] public double GCodeFeedRate { get; set; } = 3000.0;
+
+        /// <summary>펀칭 유지 시간 (초) — G4 P 값</summary>
+        [XmlElement] public double GCodeDwellSeconds { get; set; } = 0.5;
+
         // ── 변환 엔진 설정 ────────────────────────────────────────────────
 
         /// <summary>사용할 변환 엔진 (Manual / LibLouis)</summary>

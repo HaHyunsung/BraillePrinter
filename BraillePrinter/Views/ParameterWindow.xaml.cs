@@ -31,7 +31,9 @@ namespace BraillePrinter.Views
             TbMarginBottom.Text = p.MarginBottom.ToString("F2");
             TbPaperWidth.Text   = p.PaperWidth.ToString("F2");
             TbPaperHeight.Text  = p.PaperHeight.ToString("F2");
-            TbDisplayScale.Text = p.DisplayScale.ToString("F2");
+            TbDisplayScale.Text  = p.DisplayScale.ToString("F2");
+            TbFeedRate.Text      = p.GCodeFeedRate.ToString("F0");
+            TbDwellSeconds.Text  = p.GCodeDwellSeconds.ToString("F2");
 
             // 엔진 선택
             RbManual.IsChecked   = p.ConverterType == ConverterType.Manual;
@@ -63,7 +65,8 @@ namespace BraillePrinter.Views
             {
                 TbDotSpacing, TbCellSpacing, TbLineSpacing,
                 TbMarginLeft, TbMarginTop, TbMarginRight, TbMarginBottom,
-                TbPaperWidth, TbPaperHeight, TbDisplayScale
+                TbPaperWidth, TbPaperHeight, TbDisplayScale,
+                TbFeedRate, TbDwellSeconds
             })
             {
                 tb.TextChanged += (_, _) =>
@@ -145,16 +148,18 @@ namespace BraillePrinter.Views
             p = new BrailleParameters();
             var errors = new List<string>();
 
-            double dotSpacing   = ParsePositive(TbDotSpacing.Text,   "점간 거리",  errors);
-            double cellSpacing  = ParsePositive(TbCellSpacing.Text,  "자간 거리",  errors);
-            double lineSpacing  = ParsePositive(TbLineSpacing.Text,  "줄간 거리",  errors);
-            double marginLeft   = ParseNonNeg(TbMarginLeft.Text,     "좌측 여백",  errors);
-            double marginTop    = ParseNonNeg(TbMarginTop.Text,      "상단 여백",  errors);
-            double marginRight  = ParseNonNeg(TbMarginRight.Text,    "우측 여백",  errors);
-            double marginBottom = ParseNonNeg(TbMarginBottom.Text,   "하단 여백",  errors);
-            double paperWidth   = ParsePositive(TbPaperWidth.Text,   "용지 너비",  errors);
-            double paperHeight  = ParsePositive(TbPaperHeight.Text,  "용지 높이",  errors);
-            double displayScale = ParsePositive(TbDisplayScale.Text, "표시 배율",  errors);
+            double dotSpacing    = ParsePositive(TbDotSpacing.Text,    "점간 거리",        errors);
+            double cellSpacing   = ParsePositive(TbCellSpacing.Text,   "자간 거리",        errors);
+            double lineSpacing   = ParsePositive(TbLineSpacing.Text,   "줄간 거리",        errors);
+            double marginLeft    = ParseNonNeg(TbMarginLeft.Text,      "좌측 여백",        errors);
+            double marginTop     = ParseNonNeg(TbMarginTop.Text,       "상단 여백",        errors);
+            double marginRight   = ParseNonNeg(TbMarginRight.Text,     "우측 여백",        errors);
+            double marginBottom  = ParseNonNeg(TbMarginBottom.Text,    "하단 여백",        errors);
+            double paperWidth    = ParsePositive(TbPaperWidth.Text,    "용지 너비",        errors);
+            double paperHeight   = ParsePositive(TbPaperHeight.Text,   "용지 높이",        errors);
+            double displayScale  = ParsePositive(TbDisplayScale.Text,  "표시 배율",        errors);
+            double feedRate      = ParsePositive(TbFeedRate.Text,      "이동 속도",        errors);
+            double dwellSeconds  = ParsePositive(TbDwellSeconds.Text,  "펀칭 유지 시간",   errors);
 
             if (errors.Count > 0) { ShowError(string.Join("\n", errors)); return false; }
 
@@ -182,18 +187,20 @@ namespace BraillePrinter.Views
 
             p = new BrailleParameters
             {
-                DotSpacing    = dotSpacing,
-                CellSpacing   = cellSpacing,
-                LineSpacing   = lineSpacing,
-                MarginLeft    = marginLeft,
-                MarginTop     = marginTop,
-                MarginRight   = marginRight,
-                MarginBottom  = marginBottom,
-                PaperWidth    = paperWidth,
-                PaperHeight   = paperHeight,
-                DisplayScale  = displayScale,
-                ConverterType = converterType,
-                LibLouisTable = libLouisTable,
+                DotSpacing         = dotSpacing,
+                CellSpacing        = cellSpacing,
+                LineSpacing        = lineSpacing,
+                MarginLeft         = marginLeft,
+                MarginTop          = marginTop,
+                MarginRight        = marginRight,
+                MarginBottom       = marginBottom,
+                PaperWidth         = paperWidth,
+                PaperHeight        = paperHeight,
+                DisplayScale       = displayScale,
+                GCodeFeedRate      = feedRate,
+                GCodeDwellSeconds  = dwellSeconds,
+                ConverterType      = converterType,
+                LibLouisTable      = libLouisTable,
             };
 
             ClearError();
