@@ -18,6 +18,7 @@ namespace BraillePrinter
         private readonly GrblService _grbl = GrblService.Instance;
         private List<string> _currentGCode = new();
         private bool _isReverting;
+        private bool _alarmDialogOpen;   // 다이얼로그 중복 오픈 방지
 
         public MainWindow()
         {
@@ -40,6 +41,7 @@ namespace BraillePrinter
             _grbl.LineReceived += OnGrblLineReceived;
             _grbl.LineSent += OnGrblLineSent;
             _grbl.ErrorOccurred += OnGrblError;
+            _grbl.AlarmOccurred += OnGrblAlarm;
 
             ApplyCanvasSize();
             UpdateStatusBar();
@@ -486,7 +488,7 @@ namespace BraillePrinter
                 StateIndicator.Background = state switch
                 {
                     GrblState.Idle => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#388E3C")),
-                    GrblState.Run => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1565C0")),
+                    GrblState.Run  => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1565C0")),
                     GrblState.Hold => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F57C00")),
                     GrblState.Alarm => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D32F2F")),
                     GrblState.Home => new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7B1FA2")),
@@ -497,11 +499,14 @@ namespace BraillePrinter
                 if (parts.Length >= 2)
                     TxtMachinePos.Text = $"X:{parts[0]}  Y:{parts[1]}";
 
-                BtnHome.IsEnabled = _grbl.IsConnected && state != GrblState.Run;
+                BtnHome.IsEnabled = _grbl.IsConnected && state != GrblState.Run && state != GrblState.Hold;
                 TxtHomedStatus.Text = _grbl.IsHomed ? "[HOME 완료]" : "[HOME 필요]";
                 TxtHomedStatus.Foreground = _grbl.IsHomed
                     ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#388E3C"))
                     : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D32F2F"));
+
+                BtnPause.IsEnabled  = _grbl.IsConnected && state == GrblState.Run;
+                BtnResume.IsEnabled = _grbl.IsConnected && state == GrblState.Hold;
 
                 UpdatePrintButtonState();
             });
@@ -509,10 +514,17 @@ namespace BraillePrinter
 
         private void UpdatePrintButtonState()
         {
+            bool jobIdle = _grbl.State != GrblState.Run && _grbl.State != GrblState.Hold;
             BtnPrint.IsEnabled = _grbl.IsConnected
                                  && _grbl.IsHomed
                                  && _grbl.State == GrblState.Idle
                                  && _currentGCode.Count > 0;
+
+            if (jobIdle)
+            {
+                BtnPause.IsEnabled  = false;
+                BtnResume.IsEnabled = false;
+            }
         }
 
         private void OnGrblLineReceived(string line)
@@ -537,6 +549,51 @@ namespace BraillePrinter
             {
                 AppendSerialLog($"[ERROR] {msg}");
                 StatusMessage.Text = msg;
+            });
+        }
+
+        private void OnGrblAlarm(int alarmCode)
+        {
+            Dispatcher.InvokeAsync(async () =>
+            {
+                AppendSerialLog($"[ALARM] code={alarmCode}");
+                StatusMessage.Text = alarmCode > 0
+                    ? $"ALARM:{alarmCode} 발생 — 다이얼로그를 확인하세요."
+                    : "ALARM 상태 감지 — 다이얼로그를 확인하세요.";
+
+                // 진행 중 작업 즉시 중단 및 토글 갱신
+                BtnPause.IsEnabled = false;
+                BtnResume.IsEnabled = false;
+                _grbl.CancelJob();   // jobCts cancel + soft reset (이미 알람이면 즉시 반환)
+
+                // 중복 오픈 방지
+                if (_alarmDialogOpen) return;
+                _alarmDialogOpen = true;
+
+                try
+                {
+                    var dlg = new AlarmDialog(alarmCode) { Owner = this };
+                    dlg.ShowDialog();
+
+                    if (dlg.ShouldRunHome)
+                    {
+                        // 다이얼로그에서 Soft Reset은 이미 전송됨 → 약간 대기 후 Home 실행
+                        await Task.Delay(1000);
+                        BtnHome.IsEnabled = false;
+                        BtnPrint.IsEnabled = false;
+                        StatusMessage.Text = "리셋 후 홈잉 진행 중...";
+
+                        bool ok = await _grbl.HomeAsync();
+                        StatusMessage.Text = ok ? "홈잉 완료 — 인쇄 준비됨" : "홈잉 실패";
+
+                        BtnHome.IsEnabled = _grbl.IsConnected;
+                        UpdatePrintButtonState();
+                    }
+                }
+                finally
+                {
+                    _alarmDialogOpen = false;
+                }
             });
         }
 
@@ -589,9 +646,11 @@ namespace BraillePrinter
 
             if (result != MessageBoxResult.Yes) return;
 
-            BtnPrint.IsEnabled = false;
-            BtnHome.IsEnabled = false;
-            BtnStop.IsEnabled = true;
+            BtnPrint.IsEnabled   = false;
+            BtnHome.IsEnabled    = false;
+            BtnStop.IsEnabled    = true;
+            BtnPause.IsEnabled   = true;
+            BtnResume.IsEnabled  = false;
             BtnConvert.IsEnabled = false;
 
             JobProgress.Visibility = Visibility.Visible;
@@ -609,10 +668,12 @@ namespace BraillePrinter
             bool success = await _grbl.RunJobAsync(_currentGCode, progress);
 
             JobProgress.Visibility = Visibility.Collapsed;
-            TxtJobProgress.Text = "";
-            BtnStop.IsEnabled = false;
-            BtnConvert.IsEnabled = true;
-            BtnHome.IsEnabled = _grbl.IsConnected;
+            TxtJobProgress.Text   = "";
+            BtnStop.IsEnabled     = false;
+            BtnPause.IsEnabled    = false;
+            BtnResume.IsEnabled   = false;
+            BtnConvert.IsEnabled  = true;
+            BtnHome.IsEnabled     = _grbl.IsConnected;
 
             StatusMessage.Text = success
                 ? "인쇄 완료!"
@@ -621,11 +682,110 @@ namespace BraillePrinter
             UpdatePrintButtonState();
         }
 
+        private void BtnPause_Click(object sender, RoutedEventArgs e)
+        {
+            _grbl.FeedHold();
+            StatusMessage.Text = "일시정지 명령 전송됨 (Feed Hold)";
+        }
+
+        private void BtnResume_Click(object sender, RoutedEventArgs e)
+        {
+            _grbl.CycleStart();
+            StatusMessage.Text = "재개 명령 전송됨 (Cycle Start)";
+        }
+
         private void BtnStop_Click(object sender, RoutedEventArgs e)
         {
             _grbl.CancelJob();
-            BtnStop.IsEnabled = false;
-            StatusMessage.Text = "정지 명령 전송됨 (Soft Reset)";
+            BtnStop.IsEnabled   = false;
+            BtnPause.IsEnabled  = false;
+            BtnResume.IsEnabled = false;
+            StatusMessage.Text  = "정지 명령 전송됨 (Soft Reset)";
+        }
+
+        // ── Jog 컨트롤 ───────────────────────────────────────
+
+        private double GetJogStep()
+        {
+            foreach (var child in JogStepGroup.Children)
+            {
+                if (child is RadioButton rb && rb.IsChecked == true && rb.Tag is string tag
+                    && double.TryParse(tag, System.Globalization.NumberStyles.Any,
+                                       System.Globalization.CultureInfo.InvariantCulture,
+                                       out double v))
+                    return v;
+            }
+            return 1.0;
+        }
+
+        private double GetJogFeed()
+        {
+            if (double.TryParse(TbJogFeed.Text, System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out double v) && v > 0)
+                return v;
+            return 1500;
+        }
+
+        private void DoJog(string axis, int sign)
+        {
+            if (!_grbl.IsConnected)
+            {
+                StatusMessage.Text = "GRBL 미연결 상태입니다.";
+                return;
+            }
+            if (_grbl.State == GrblState.Run || _grbl.State == GrblState.Hold)
+            {
+                StatusMessage.Text = "작업 중에는 Jog 할 수 없습니다.";
+                return;
+            }
+
+            double step = GetJogStep() * sign;
+            double feed = GetJogFeed();
+            string? resp = _grbl.Jog(axis, step, feed);
+
+            if (resp == null)
+                StatusMessage.Text = "Jog 명령 응답 없음";
+            else if (resp.StartsWith("error"))
+                StatusMessage.Text = $"Jog 오류: {resp}";
+            else
+                StatusMessage.Text = $"Jog: {axis}{(step >= 0 ? "+" : "")}{step:F2}mm @ F{feed:F0}";
+        }
+
+        private void BtnJogXPlus_Click(object sender, RoutedEventArgs e)   => DoJog("X", +1);
+        private void BtnJogXMinus_Click(object sender, RoutedEventArgs e)  => DoJog("X", -1);
+        private void BtnJogYPlus_Click(object sender, RoutedEventArgs e)   => DoJog("Y", +1);
+        private void BtnJogYMinus_Click(object sender, RoutedEventArgs e)  => DoJog("Y", -1);
+
+        private void BtnJogCancel_Click(object sender, RoutedEventArgs e)
+        {
+            _grbl.JogCancel();
+            StatusMessage.Text = "Jog 중지 명령 전송됨";
+        }
+
+        private void BtnGoOrigin_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            if (!_grbl.IsHomed)
+            {
+                MessageBox.Show("HOME이 완료되지 않은 상태에서는 원점 이동이 위험할 수 있습니다.\n먼저 HOME을 실행하세요.",
+                                "원점 이동", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            string? resp = _grbl.SendLine("G90 G0 X0 Y0");
+            StatusMessage.Text = resp == null ? "응답 없음" : $"원점 이동: {resp}";
+        }
+
+        private void BtnKillAlarmLock_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            var result = MessageBox.Show(
+                "$X 는 홈잉 없이 알람만 해제합니다. 기계 위치가 부정확할 수 있어 충돌 위험이 있습니다.\n계속할까요?",
+                "알람 해제", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes) return;
+
+            string? resp = _grbl.KillAlarmLock();
+            StatusMessage.Text = resp == null ? "응답 없음" : $"$X: {resp}";
         }
 
         // ── Window close cleanup ─────────────────────────────

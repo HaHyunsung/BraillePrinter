@@ -1,0 +1,87 @@
+<Window x:Class="BraillePrinter.Views.AlarmDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GRBL 알람"
+        Width="480" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="#FFF9F9">
+
+    <Grid Margin="24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 아이콘 + 제목 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+            <Border Background="#D32F2F" CornerRadius="20"
+                    Width="40" Height="40" Margin="0,0,12,0">
+                <TextBlock Text="!" FontSize="22" FontWeight="Bold"
+                           Foreground="White"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock x:Name="TbAlarmTitle"
+                           FontSize="16" FontWeight="Bold"
+                           Foreground="#D32F2F"/>
+                <TextBlock Text="동작이 잠금 상태입니다."
+                           FontSize="11" Foreground="#777"/>
+            </StackPanel>
+        </StackPanel>
+
+        <Separator Grid.Row="1" Margin="0,0,0,12"/>
+
+        <!-- 원인 설명 -->
+        <Border Grid.Row="2"
+                Background="#FFEBEE"
+                BorderBrush="#EF9A9A" BorderThickness="1"
+                CornerRadius="4" Padding="12,10"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="발생 원인" FontWeight="SemiBold"
+                           FontSize="12" Margin="0,0,0,4"/>
+                <TextBlock x:Name="TbAlarmDesc"
+                           FontSize="12" TextWrapping="Wrap"
+                           Foreground="#333"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 해결 방법 안내 -->
+        <Border Grid.Row="3"
+                Background="#E3F2FD"
+                BorderBrush="#90CAF9" BorderThickness="1"
+                CornerRadius="4" Padding="12,10"
+                Margin="0,0,0,18">
+            <StackPanel>
+                <TextBlock Text="해결 방법" FontWeight="SemiBold"
+                           FontSize="12" Margin="0,0,0,4"/>
+                <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="#333">
+                    <Run Text="① 기계를 장애물에서 벗어난 위치로 이동하세요."/>
+                    <LineBreak/>
+                    <Run Text="② [리셋 &amp; 홈] 버튼을 눌러 Soft Reset 후 홈잉을 수행합니다."/>
+                    <LineBreak/>
+                    <Run Text="③ 문제가 반복되면 하드웨어(리밋 스위치·배선)를 점검하세요."/>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- 버튼 -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="BtnResetHome"
+                    Content="리셋 &amp; 홈"
+                    Width="110" Height="34" FontSize="13"
+                    Background="#D32F2F" Foreground="White"
+                    Margin="0,0,10,0"
+                    Click="BtnResetHome_Click"/>
+            <Button x:Name="BtnClose"
+                    Content="닫기"
+                    Width="80" Height="34" FontSize="13"
+                    Click="BtnClose_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

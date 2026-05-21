@@ -26,9 +26,15 @@ namespace BraillePrinter.Services
         public event Action<string>? LineSent;
         public event Action<GrblState>? StateChanged;
         public event Action<string>? ErrorOccurred;
+        public event Action<int>? AlarmOccurred;   // arg = alarm code (0 = unknown)
+
+        public int AlarmCode { get; private set; }
 
         private static readonly Regex StateRegex =
             new(@"<(\w+)(?::[\d])?[|]MPos:([\-\d.,]+)", RegexOptions.Compiled);
+
+        private static readonly Regex AlarmLineRegex =
+            new(@"ALARM:(\d+)", RegexOptions.Compiled);
 
         private GrblService() { }
 
@@ -54,8 +60,11 @@ namespace BraillePrinter.Services
                 {
                     string greeting = _port.ReadExisting();
                     LineReceived?.Invoke(greeting.Trim());
+                    foreach (var greetLine in greeting.Split('\n'))
+                        TryParseAlarmLine(greetLine.Trim());
                 }
 
+                AlarmCode = 0;
                 UpdateState(GrblState.Unknown);
                 IsHomed = false;
                 StartPolling();
@@ -87,6 +96,7 @@ namespace BraillePrinter.Services
             }
 
             IsHomed = false;
+            AlarmCode = 0;
             UpdateState(GrblState.Disconnected);
         }
 
@@ -103,6 +113,7 @@ namespace BraillePrinter.Services
 
                     string response = _port.ReadLine().Trim();
                     LineReceived?.Invoke(response);
+                    TryParseAlarmLine(response);
                     return response;
                 }
                 catch (TimeoutException)
@@ -152,6 +163,7 @@ namespace BraillePrinter.Services
                     else
                     {
                         LineReceived?.Invoke(response);
+                        TryParseAlarmLine(response);
                     }
 
                     return response;
@@ -186,11 +198,30 @@ namespace BraillePrinter.Services
 
         private void UpdateState(GrblState newState)
         {
-            if (State != newState)
-            {
-                State = newState;
-                StateChanged?.Invoke(newState);
-            }
+            if (State == newState) return;
+
+            bool enteringAlarm = newState == GrblState.Alarm;
+            State = newState;
+            StateChanged?.Invoke(newState);
+
+            if (enteringAlarm)
+                AlarmOccurred?.Invoke(AlarmCode);
+        }
+
+        // Parse "ALARM:N" lines that GRBL sends proactively (greeting, mid-job)
+        private void TryParseAlarmLine(string line)
+        {
+            var m = AlarmLineRegex.Match(line);
+            if (!m.Success) return;
+
+            int code = int.Parse(m.Groups[1].Value);
+            AlarmCode = code;
+
+            // If we're already in Alarm state the transition won't re-fire, so fire directly.
+            if (State == GrblState.Alarm)
+                AlarmOccurred?.Invoke(code);
+            else
+                UpdateState(GrblState.Alarm); // fires AlarmOccurred inside
         }
 
         private void StartPolling()
@@ -333,6 +364,28 @@ namespace BraillePrinter.Services
         public void FeedHold() => SendRealtimeCommand(0x21);   // '!'
         public void CycleStart() => SendRealtimeCommand(0x7E); // '~'
         public void SoftReset() => SendRealtimeCommand(0x18);  // Ctrl-X
+        public void JogCancel() => SendRealtimeCommand(0x85);  // Jog cancel
+
+        // ── Jog ───────────────────────────────────────────
+        // axis: "X" or "Y", distance: signed mm, feed: mm/min
+        public string? Jog(string axis, double distance, double feed)
+        {
+            if (!IsConnected) return null;
+            if (State == GrblState.Alarm)
+            {
+                ErrorOccurred?.Invoke("Alarm 상태에서는 Jog 불가 — 먼저 리셋 & 홈을 실행하세요.");
+                return null;
+            }
+
+            string d = distance.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+            string f = feed.ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
+            // G91 incremental jog: $J=G91 X<d> F<f>
+            string cmd = $"$J=G91 {axis}{d} F{f}";
+            return SendLine(cmd);
+        }
+
+        // Kill alarm lock without rehoming ($X). Use with caution — position becomes unreliable.
+        public string? KillAlarmLock() => SendLine("$X");
 
         public void Dispose()
         {

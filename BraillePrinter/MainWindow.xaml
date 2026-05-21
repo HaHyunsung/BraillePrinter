@@ -105,9 +105,23 @@
                         IsEnabled="False"
                         Click="BtnPrint_Click"/>
 
+                <Button x:Name="BtnPause"
+                        Style="{StaticResource ToolBtn}"
+                        Content="일시정지"
+                        Background="#F57C00" Foreground="White"
+                        IsEnabled="False"
+                        Click="BtnPause_Click"/>
+
+                <Button x:Name="BtnResume"
+                        Style="{StaticResource ToolBtn}"
+                        Content="재개"
+                        Background="#388E3C" Foreground="White"
+                        IsEnabled="False"
+                        Click="BtnResume_Click"/>
+
                 <Button x:Name="BtnStop"
                         Style="{StaticResource ToolBtn}"
-                        Content="정지"
+                        Content="취소(E-Stop)"
                         IsEnabled="False"
                         Click="BtnStop_Click"/>
             </StackPanel>
@@ -349,6 +363,121 @@
                 </TabItem>
 
                 <!-- 탭4: 통신 로그 -->
+                <TabItem Header="수동 제어 (Jog)">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="20" MaxWidth="520" HorizontalAlignment="Left">
+
+                            <TextBlock Text="수동 이동 (Jog)"
+                                       FontSize="15" FontWeight="SemiBold"
+                                       Foreground="#1565C0"
+                                       Margin="0,0,0,6"/>
+                            <TextBlock Text="GRBL이 Idle 상태이고 연결되어 있어야 사용 가능합니다. $J=G91 명령으로 상대이동합니다."
+                                       FontSize="11" Foreground="#777"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,14"/>
+
+                            <!-- 스텝 사이즈 -->
+                            <TextBlock Text="이동 거리 (mm)" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,4"/>
+                            <StackPanel x:Name="JogStepGroup" Orientation="Horizontal" Margin="0,0,0,12">
+                                <RadioButton Content="0.1"  GroupName="JogStep" Tag="0.1"  Margin="0,0,12,0"
+                                             VerticalAlignment="Center" FontSize="12"/>
+                                <RadioButton Content="1"    GroupName="JogStep" Tag="1"    Margin="0,0,12,0"
+                                             VerticalAlignment="Center" FontSize="12" IsChecked="True"/>
+                                <RadioButton Content="10"   GroupName="JogStep" Tag="10"   Margin="0,0,12,0"
+                                             VerticalAlignment="Center" FontSize="12"/>
+                                <RadioButton Content="50"   GroupName="JogStep" Tag="50"   Margin="0,0,12,0"
+                                             VerticalAlignment="Center" FontSize="12"/>
+                                <RadioButton Content="100"  GroupName="JogStep" Tag="100"
+                                             VerticalAlignment="Center" FontSize="12"/>
+                            </StackPanel>
+
+                            <!-- 이동 속도 -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <TextBlock Text="이동 속도 (F)" FontWeight="SemiBold" FontSize="12"
+                                           VerticalAlignment="Center" Width="100"/>
+                                <TextBox x:Name="TbJogFeed" Width="90" Padding="4,3"
+                                         Text="1500" FontSize="12"
+                                         VerticalContentAlignment="Center"/>
+                                <TextBlock Text="mm/min" VerticalAlignment="Center"
+                                           FontSize="11" Foreground="#777" Margin="6,0,0,0"/>
+                            </StackPanel>
+
+                            <!-- 방향 버튼 (D-Pad 레이아웃) -->
+                            <TextBlock Text="방향" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                            <Grid HorizontalAlignment="Left" Margin="0,0,0,14">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Y+ (위) -->
+                                <Button x:Name="BtnJogYPlus"
+                                        Grid.Row="0" Grid.Column="1"
+                                        Content="▲&#10;Y+" FontSize="13"
+                                        Width="64" Height="56" Margin="3"
+                                        Background="#1565C0" Foreground="White"
+                                        Click="BtnJogYPlus_Click"/>
+
+                                <!-- X- (왼쪽) -->
+                                <Button x:Name="BtnJogXMinus"
+                                        Grid.Row="1" Grid.Column="0"
+                                        Content="◀&#10;X-" FontSize="13"
+                                        Width="64" Height="56" Margin="3"
+                                        Background="#1565C0" Foreground="White"
+                                        Click="BtnJogXMinus_Click"/>
+
+                                <!-- 중앙 (Jog Cancel) -->
+                                <Button x:Name="BtnJogCancel"
+                                        Grid.Row="1" Grid.Column="1"
+                                        Content="중지" FontSize="11"
+                                        Width="64" Height="56" Margin="3"
+                                        Background="#9E9E9E" Foreground="White"
+                                        Click="BtnJogCancel_Click"/>
+
+                                <!-- X+ (오른쪽) -->
+                                <Button x:Name="BtnJogXPlus"
+                                        Grid.Row="1" Grid.Column="2"
+                                        Content="▶&#10;X+" FontSize="13"
+                                        Width="64" Height="56" Margin="3"
+                                        Background="#1565C0" Foreground="White"
+                                        Click="BtnJogXPlus_Click"/>
+
+                                <!-- Y- (아래) -->
+                                <Button x:Name="BtnJogYMinus"
+                                        Grid.Row="2" Grid.Column="1"
+                                        Content="▼&#10;Y-" FontSize="13"
+                                        Width="64" Height="56" Margin="3"
+                                        Background="#1565C0" Foreground="White"
+                                        Click="BtnJogYMinus_Click"/>
+                            </Grid>
+
+                            <!-- 보조 기능 -->
+                            <TextBlock Text="보조 기능" FontWeight="SemiBold" FontSize="12" Margin="0,8,0,6"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="BtnGoOrigin"
+                                        Content="원점 이동 (G0 X0 Y0)"
+                                        Padding="12,6" FontSize="12"
+                                        Margin="0,0,8,0"
+                                        Click="BtnGoOrigin_Click"/>
+                                <Button x:Name="BtnKillAlarmLock"
+                                        Content="$X (알람 해제)"
+                                        Padding="12,6" FontSize="12"
+                                        Background="#F57C00" Foreground="White"
+                                        Click="BtnKillAlarmLock_Click"/>
+                            </StackPanel>
+                            <TextBlock Text="※ $X는 홈잉 없이 알람만 해제합니다 — 위치 신뢰성이 보장되지 않으므로 가급적 HOME을 사용하세요."
+                                       FontSize="10" Foreground="#D32F2F"
+                                       TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
                 <TabItem Header="통신 로그">
                     <DockPanel>
                         <Border DockPanel.Dock="Top" Background="#F5F5F5" Padding="8,4"
