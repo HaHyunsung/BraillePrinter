@@ -40,11 +40,13 @@ namespace BraillePrinter
             _grbl.StateChanged += OnGrblStateChanged;
             _grbl.LineReceived += OnGrblLineReceived;
             _grbl.LineSent += OnGrblLineSent;
+            _grbl.PollReceived += OnGrblPollReceived;
             _grbl.ErrorOccurred += OnGrblError;
             _grbl.AlarmOccurred += OnGrblAlarm;
 
             ApplyCanvasSize();
             UpdateStatusBar();
+            UpdatePinButtonLabels();
             RefreshPorts();
         }
 
@@ -137,7 +139,21 @@ namespace BraillePrinter
                 ApplyCanvasSize();
                 RunConvert();
                 UpdateStatusBar();
+                UpdatePinButtonLabels();
             });
+        }
+
+        private void UpdatePinButtonLabels()
+        {
+            bool inv = ParameterManager.Instance.Parameters.SolenoidInvert;
+            string onCmd  = inv ? "M5" : "M3";
+            string offCmd = inv ? "M3" : "M5";
+
+            BtnPinDown.Content = $"▼  핀 다운 ({onCmd})";
+            BtnPinUp.Content   = $"▲  핀 업 ({offCmd})";
+            TxtPinHint.Text    = inv
+                ? $"※ {onCmd} = 솔레노이드 ON (펀칭), {offCmd} = 솔레노이드 OFF (복귀)  [반전 모드]"
+                : $"※ {onCmd} = 솔레노이드 ON (펀칭), {offCmd} = 솔레노이드 OFF (복귀)";
         }
 
         // ── 캔버스 렌더링 ────────────────────────────────────
@@ -429,10 +445,7 @@ namespace BraillePrinter
             }
         }
 
-        private void BtnClearSerialLog_Click(object sender, RoutedEventArgs e)
-        {
-            TxtSerialLog.Clear();
-        }
+        private void BtnClearSerialLog_Click(object sender, RoutedEventArgs e) => TxtSerialLog.Clear();
 
         // ══════════════════════════════════════════════════════
         //  시리얼 통신 / GRBL
@@ -599,9 +612,30 @@ namespace BraillePrinter
 
         private void AppendSerialLog(string text)
         {
-            TxtSerialLog.AppendText($"[{DateTime.Now:HH:mm:ss.fff}] {text}\n");
+            string line = $"[{DateTime.Now:HH:mm:ss.fff}] {text}\n";
+            TxtSerialLog.AppendText(line);
             TxtSerialLog.ScrollToEnd();
+            TxtSerialLog2.AppendText(line);
+            TxtSerialLog2.ScrollToEnd();
         }
+
+        private void AppendPollLog(string text)
+        {
+            string line = $"[{DateTime.Now:HH:mm:ss.fff}] {text}\n";
+            TxtPollLog.AppendText(line);
+            TxtPollLog.ScrollToEnd();
+            TxtPollLog2.AppendText(line);
+            TxtPollLog2.ScrollToEnd();
+        }
+
+        private void OnGrblPollReceived(string line)
+        {
+            Dispatcher.InvokeAsync(() => AppendPollLog(line));
+        }
+
+        private void BtnClearSerialLog2_Click(object sender, RoutedEventArgs e) => TxtSerialLog2.Clear();
+        private void BtnClearPollLog_Click(object sender, RoutedEventArgs e)    => TxtPollLog.Clear();
+        private void BtnClearPollLog2_Click(object sender, RoutedEventArgs e)   => TxtPollLog2.Clear();
 
         // ── Home ─────────────────────────────────────────────
 
@@ -757,6 +791,22 @@ namespace BraillePrinter
         private void BtnJogYPlus_Click(object sender, RoutedEventArgs e)   => DoJog("Y", +1);
         private void BtnJogYMinus_Click(object sender, RoutedEventArgs e)  => DoJog("Y", -1);
 
+        private async void BtnPinDown_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            string cmd = GCodeGenerator.PinOnCmd;
+            string? resp = await Task.Run(() => _grbl.SendLine(cmd));
+            StatusMessage.Text = resp == null ? $"{cmd} 응답 없음" : $"핀 다운 ({cmd}): {resp}";
+        }
+
+        private async void BtnPinUp_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            string cmd = GCodeGenerator.PinOffCmd;
+            string? resp = await Task.Run(() => _grbl.SendLine(cmd));
+            StatusMessage.Text = resp == null ? $"{cmd} 응답 없음" : $"핀 업 ({cmd}): {resp}";
+        }
+
         private void BtnJogCancel_Click(object sender, RoutedEventArgs e)
         {
             _grbl.JogCancel();
@@ -786,6 +836,47 @@ namespace BraillePrinter
 
             string? resp = _grbl.KillAlarmLock();
             StatusMessage.Text = resp == null ? "응답 없음" : $"$X: {resp}";
+        }
+
+        // ── GRBL 진단 명령 ───────────────────────────────────
+
+        private async void BtnDiagBuildInfo_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            StatusMessage.Text = "$I 전송 중...";
+            await Task.Run(() => _grbl.SendQuery("$I"));
+            StatusMessage.Text = "$I 완료 — 통신 로그 확인";
+        }
+
+        private async void BtnDiagSettings_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            StatusMessage.Text = "$$ 전송 중...";
+            await Task.Run(() => _grbl.SendQuery("$$"));
+            StatusMessage.Text = "$$ 완료 — 통신 로그 확인";
+        }
+
+        private async void BtnDiagParserState_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            StatusMessage.Text = "$G 전송 중...";
+            await Task.Run(() => _grbl.SendQuery("$G"));
+            StatusMessage.Text = "$G 완료 — 통신 로그 확인";
+        }
+
+        private async void BtnDiagCoords_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            StatusMessage.Text = "$# 전송 중...";
+            await Task.Run(() => _grbl.SendQuery("$#"));
+            StatusMessage.Text = "$# 완료 — 통신 로그 확인";
+        }
+
+        private void BtnDiagSoftReset_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
+            _grbl.SoftReset();
+            StatusMessage.Text = "소프트 리셋 전송됨 (Ctrl-X)";
         }
 
         // ── Window close cleanup ─────────────────────────────

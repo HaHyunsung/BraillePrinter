@@ -3,6 +3,7 @@ using System.Windows.Media;
 using BraillePrinter.Converters;
 using BraillePrinter.Managers;
 using BraillePrinter.Models;
+using static BraillePrinter.Models.PrintMode;
 
 namespace BraillePrinter.Views
 {
@@ -33,7 +34,24 @@ namespace BraillePrinter.Views
             TbPaperHeight.Text  = p.PaperHeight.ToString("F2");
             TbDisplayScale.Text  = p.DisplayScale.ToString("F2");
             TbFeedRate.Text      = p.GCodeFeedRate.ToString("F0");
-            TbDwellSeconds.Text  = p.GCodeDwellSeconds.ToString("F2");
+            TbPunchDwell.Text    = p.PunchDwellSeconds.ToString("F2");
+            TbRetractDwell.Text  = p.RetractDwellSeconds.ToString("F2");
+
+            // 연속 스캔 파라미터
+            TbScanFeedRate.Text  = p.ScanFeedRate.ToString("F0");
+            TbScanM3Offset.Text  = p.ScanM3OffsetMm.ToString("F3");
+            TbScanM5Offset.Text  = p.ScanM5OffsetMm.ToString("F3");
+
+            // 기계 원점 오프셋
+            TbOriginOffsetX.Text = p.OriginOffsetX.ToString("F3");
+            TbOriginOffsetY.Text = p.OriginOffsetY.ToString("F3");
+
+            // 솔레노이드
+            ChkSolenoidInvert.IsChecked = p.SolenoidInvert;
+
+            // 출력 모드
+            RbStopAndPunch.IsChecked   = p.PrintMode == PrintMode.StopAndPunch;
+            RbContinuousScan.IsChecked = p.PrintMode == PrintMode.ContinuousScan;
 
             // 엔진 선택
             RbManual.IsChecked   = p.ConverterType == ConverterType.Manual;
@@ -43,6 +61,7 @@ namespace BraillePrinter.Views
             SelectLibLouisTableItem(p.LibLouisTable);
 
             UpdateCalcFields(p);
+            UpdateScanPanelState();
             ClearError();
         }
 
@@ -66,7 +85,9 @@ namespace BraillePrinter.Views
                 TbDotSpacing, TbCellSpacing, TbLineSpacing,
                 TbMarginLeft, TbMarginTop, TbMarginRight, TbMarginBottom,
                 TbPaperWidth, TbPaperHeight, TbDisplayScale,
-                TbFeedRate, TbDwellSeconds
+                TbFeedRate, TbPunchDwell, TbRetractDwell,
+                TbScanFeedRate, TbScanM3Offset, TbScanM5Offset,
+                TbOriginOffsetX, TbOriginOffsetY
             })
             {
                 tb.TextChanged += (_, _) =>
@@ -106,6 +127,21 @@ namespace BraillePrinter.Views
             // 테이블 콤보박스 / 안내 패널은 liblouis 선택 시에만 활성
             bool libLouisSelected = RbLibLouis.IsChecked == true;
             PanelLibLouisTable.IsEnabled = libLouisSelected && available;
+        }
+
+        // ── 출력 모드 라디오 버튼 ─────────────────────────────────────────
+
+        private void PrintModeRadio_Changed(object sender, RoutedEventArgs e)
+        {
+            if (PanelScanSettings == null) return;
+            UpdateScanPanelState();
+        }
+
+        private void UpdateScanPanelState()
+        {
+            bool scan = RbContinuousScan?.IsChecked == true;
+            PanelScanSettings.IsEnabled = scan;
+            PanelScanSettings.Opacity   = scan ? 1.0 : 0.45;
         }
 
         // ── 엔진 라디오 버튼 ────────────────────────────────────────────
@@ -148,18 +184,25 @@ namespace BraillePrinter.Views
             p = new BrailleParameters();
             var errors = new List<string>();
 
-            double dotSpacing    = ParsePositive(TbDotSpacing.Text,    "점간 거리",        errors);
-            double cellSpacing   = ParsePositive(TbCellSpacing.Text,   "자간 거리",        errors);
-            double lineSpacing   = ParsePositive(TbLineSpacing.Text,   "줄간 거리",        errors);
-            double marginLeft    = ParseNonNeg(TbMarginLeft.Text,      "좌측 여백",        errors);
-            double marginTop     = ParseNonNeg(TbMarginTop.Text,       "상단 여백",        errors);
-            double marginRight   = ParseNonNeg(TbMarginRight.Text,     "우측 여백",        errors);
-            double marginBottom  = ParseNonNeg(TbMarginBottom.Text,    "하단 여백",        errors);
-            double paperWidth    = ParsePositive(TbPaperWidth.Text,    "용지 너비",        errors);
-            double paperHeight   = ParsePositive(TbPaperHeight.Text,   "용지 높이",        errors);
-            double displayScale  = ParsePositive(TbDisplayScale.Text,  "표시 배율",        errors);
-            double feedRate      = ParsePositive(TbFeedRate.Text,      "이동 속도",        errors);
-            double dwellSeconds  = ParsePositive(TbDwellSeconds.Text,  "펀칭 유지 시간",   errors);
+            double dotSpacing        = ParsePositive(TbDotSpacing.Text,       "점간 거리",              errors);
+            double cellSpacing       = ParsePositive(TbCellSpacing.Text,      "자간 거리",              errors);
+            double lineSpacing       = ParsePositive(TbLineSpacing.Text,      "줄간 거리",              errors);
+            double marginLeft        = ParseNonNeg(TbMarginLeft.Text,         "좌측 여백",              errors);
+            double marginTop         = ParseNonNeg(TbMarginTop.Text,          "상단 여백",              errors);
+            double marginRight       = ParseNonNeg(TbMarginRight.Text,        "우측 여백",              errors);
+            double marginBottom      = ParseNonNeg(TbMarginBottom.Text,       "하단 여백",              errors);
+            double paperWidth        = ParsePositive(TbPaperWidth.Text,       "용지 너비",              errors);
+            double paperHeight       = ParsePositive(TbPaperHeight.Text,      "용지 높이",              errors);
+            double displayScale      = ParsePositive(TbDisplayScale.Text,     "표시 배율",              errors);
+            double feedRate          = ParsePositive(TbFeedRate.Text,         "급속 이동 속도",          errors);
+            double punchDwell        = ParsePositive(TbPunchDwell.Text,       "핀 내려찍기 대기",        errors);
+            double retractDwell      = ParseNonNeg(TbRetractDwell.Text,       "핀 복귀 대기",            errors);
+            double scanFeedRate  = ParsePositive(TbScanFeedRate.Text,  "스캔 이동 속도",    errors);
+            double scanM3Offset  = ParseNonNeg(TbScanM3Offset.Text,   "M3 선발사 Offset", errors);
+            double scanM5Offset  = ParseNonNeg(TbScanM5Offset.Text,   "M5 후발사 Offset", errors);
+            double originOffsetX = ParseAny(TbOriginOffsetX.Text, "X 오프셋", errors);
+            double originOffsetY = ParseAny(TbOriginOffsetY.Text, "Y 오프셋", errors);
+            bool solenoidInvert  = ChkSolenoidInvert.IsChecked == true;
 
             if (errors.Count > 0) { ShowError(string.Join("\n", errors)); return false; }
 
@@ -174,6 +217,11 @@ namespace BraillePrinter.Views
                 return false;
             }
 
+            // 출력 모드
+            var printMode = RbContinuousScan.IsChecked == true
+                ? PrintMode.ContinuousScan
+                : PrintMode.StopAndPunch;
+
             // 엔진 선택
             var converterType = RbLibLouis.IsChecked == true
                 ? ConverterType.LibLouis
@@ -187,20 +235,28 @@ namespace BraillePrinter.Views
 
             p = new BrailleParameters
             {
-                DotSpacing         = dotSpacing,
-                CellSpacing        = cellSpacing,
-                LineSpacing        = lineSpacing,
-                MarginLeft         = marginLeft,
-                MarginTop          = marginTop,
-                MarginRight        = marginRight,
-                MarginBottom       = marginBottom,
-                PaperWidth         = paperWidth,
-                PaperHeight        = paperHeight,
-                DisplayScale       = displayScale,
-                GCodeFeedRate      = feedRate,
-                GCodeDwellSeconds  = dwellSeconds,
-                ConverterType      = converterType,
-                LibLouisTable      = libLouisTable,
+                DotSpacing              = dotSpacing,
+                CellSpacing             = cellSpacing,
+                LineSpacing             = lineSpacing,
+                MarginLeft              = marginLeft,
+                MarginTop               = marginTop,
+                MarginRight             = marginRight,
+                MarginBottom            = marginBottom,
+                PaperWidth              = paperWidth,
+                PaperHeight             = paperHeight,
+                DisplayScale            = displayScale,
+                PrintMode               = printMode,
+                GCodeFeedRate           = feedRate,
+                PunchDwellSeconds       = punchDwell,
+                RetractDwellSeconds     = retractDwell,
+                ScanFeedRate    = scanFeedRate,
+                ScanM3OffsetMm  = scanM3Offset,
+                ScanM5OffsetMm  = scanM5Offset,
+                OriginOffsetX   = originOffsetX,
+                OriginOffsetY   = originOffsetY,
+                SolenoidInvert  = solenoidInvert,
+                ConverterType           = converterType,
+                LibLouisTable           = libLouisTable,
             };
 
             ClearError();
@@ -213,6 +269,14 @@ namespace BraillePrinter.Views
                                 System.Globalization.CultureInfo.InvariantCulture, out double v)
                 && v > 0) return v;
             errors.Add($"'{name}'에 양수 숫자를 입력하세요.");
+            return 0;
+        }
+
+        private static double ParseAny(string text, string name, List<string> errors)
+        {
+            if (double.TryParse(text, System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.InvariantCulture, out double v)) return v;
+            errors.Add($"'{name}'에 숫자를 입력하세요.");
             return 0;
         }
 

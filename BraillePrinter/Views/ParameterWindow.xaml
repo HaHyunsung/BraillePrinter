@@ -187,19 +187,104 @@
                 <TextBlock Style="{StaticResource SectionLabel}" Text="G-Code 출력 설정"/>
                 <Separator Margin="0,0,0,8"/>
 
+                <!-- 출력 모드 -->
                 <StackPanel Orientation="Horizontal" Margin="0,4">
-                    <TextBlock Style="{StaticResource ParamLabel}" Text="이동 속도 (F)"/>
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="출력 모드"/>
+                    <RadioButton x:Name="RbStopAndPunch"
+                                 Content="정지 찍기"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,16,0"
+                                 Checked="PrintModeRadio_Changed"/>
+                    <RadioButton x:Name="RbContinuousScan"
+                                 Content="연속 스캔"
+                                 VerticalAlignment="Center"
+                                 Checked="PrintModeRadio_Changed"/>
+                </StackPanel>
+
+                <!-- 급속 이동 속도 -->
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="급속 이동 속도 (G0 F)"/>
                     <TextBox x:Name="TbFeedRate" Style="{StaticResource ParamTextBox}"/>
                     <TextBlock Style="{StaticResource UnitLabel}" Text="mm/min"/>
                     <TextBlock Style="{StaticResource RangeLabel}" Text="권장: 1000 ~ 5000"/>
                 </StackPanel>
 
+                <!-- 핀 내려찍기 유지 시간 -->
                 <StackPanel Orientation="Horizontal" Margin="0,4">
-                    <TextBlock Style="{StaticResource ParamLabel}" Text="펀칭 유지 시간 (G4 P)"/>
-                    <TextBox x:Name="TbDwellSeconds" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="핀 내려찍기 대기 (M3 후)"/>
+                    <TextBox x:Name="TbPunchDwell" Style="{StaticResource ParamTextBox}"/>
                     <TextBlock Style="{StaticResource UnitLabel}" Text="초"/>
                     <TextBlock Style="{StaticResource RangeLabel}" Text="권장: 0.1 ~ 1.0"/>
                 </StackPanel>
+
+                <!-- 핀 복귀 대기 시간 -->
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="핀 복귀 대기 (M5 후)"/>
+                    <TextBox x:Name="TbRetractDwell" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="초"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="0이면 생략. 권장: 0.05 ~ 0.3"/>
+                </StackPanel>
+
+                <!-- 연속 스캔 설정 (스캔 모드 선택 시 활성 / GRBL $32=1 필요) -->
+                <StackPanel x:Name="PanelScanSettings" IsEnabled="False" Opacity="0.45" Margin="0,6,0,0">
+                    <TextBlock Style="{StaticResource SectionLabel}" Text="연속 스캔 설정  (GRBL $32=1 레이저 모드 필요)"/>
+                    <Separator Margin="0,0,0,8"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4">
+                        <TextBlock Style="{StaticResource ParamLabel}" Text="스캔 이동 속도 (G1 F)"/>
+                        <TextBox x:Name="TbScanFeedRate" Style="{StaticResource ParamTextBox}"/>
+                        <TextBlock Style="{StaticResource UnitLabel}" Text="mm/min"/>
+                        <TextBlock Style="{StaticResource RangeLabel}" Text="권장: 500 ~ 3000"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4">
+                        <TextBlock Style="{StaticResource ParamLabel}" Text="M3 선발사 Offset"/>
+                        <TextBox x:Name="TbScanM3Offset" Style="{StaticResource ParamTextBox}"/>
+                        <TextBlock Style="{StaticResource UnitLabel}" Text="mm"/>
+                        <TextBlock Style="{StaticResource RangeLabel}" Text="목표 위치보다 앞에서 ON"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4">
+                        <TextBlock Style="{StaticResource ParamLabel}" Text="M5 후발사 Offset"/>
+                        <TextBox x:Name="TbScanM5Offset" Style="{StaticResource ParamTextBox}"/>
+                        <TextBlock Style="{StaticResource UnitLabel}" Text="mm"/>
+                        <TextBlock Style="{StaticResource RangeLabel}" Text="목표 위치를 지나서 OFF"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 기계 원점 오프셋 -->
+                <TextBlock Style="{StaticResource SectionLabel}" Text="기계 원점 오프셋"/>
+                <Separator Margin="0,0,0,8"/>
+                <TextBlock Text="홈 완료 후 실제 인쇄 시작 위치를 조정합니다. 모든 G-Code 좌표에 더해집니다."
+                           FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="X 오프셋"/>
+                    <TextBox x:Name="TbOriginOffsetX" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="음수 가능. 기본값: 0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="Y 오프셋"/>
+                    <TextBox x:Name="TbOriginOffsetY" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="음수 가능. 기본값: 0"/>
+                </StackPanel>
+
+                <!-- 솔레노이드 설정 -->
+                <TextBlock Style="{StaticResource SectionLabel}" Text="솔레노이드 설정"/>
+                <Separator Margin="0,0,0,8"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="솔레노이드 반전 (B접점)"/>
+                    <CheckBox x:Name="ChkSolenoidInvert"
+                              VerticalAlignment="Center"
+                              FontSize="12"
+                              Content="반전 (M3=OFF, M5=ON)"/>
+                </StackPanel>
+                <TextBlock Text="※ A접점(NO, 기본): M3=ON, M5=OFF  /  B접점(NC): M3=OFF, M5=ON"
+                           FontSize="10" Foreground="#777" Margin="0,2,0,0"/>
 
                 <!-- 변환 엔진 -->
                 <TextBlock Style="{StaticResource SectionLabel}" Text="변환 엔진"/>

@@ -11,6 +11,15 @@ namespace BraillePrinter.Models
         LibLouis,
     }
 
+    /// <summary>G-Code 출력 모드</summary>
+    public enum PrintMode
+    {
+        /// <summary>각 점 위치에 정지 후 찍기</summary>
+        StopAndPunch,
+        /// <summary>행을 스캔하면서 연속 찍기 (솔레노이드 선발사 Offset 적용)</summary>
+        ContinuousScan,
+    }
+
     /// <summary>
     /// 점자 출력 물리 파라미터 (2020 한국 점자 규정 기반)
     /// ParameterManager에 의해 XML로 저장/복원됩니다.
@@ -51,11 +60,50 @@ namespace BraillePrinter.Models
 
         // ── G-Code 출력 설정 ─────────────────────────────────────────────
 
+        /// <summary>출력 모드 (정지 찍기 / 연속 스캔)</summary>
+        [XmlElement] public PrintMode PrintMode { get; set; } = PrintMode.StopAndPunch;
+
         /// <summary>급속이동 속도 (mm/min) — G0 F 값</summary>
         [XmlElement] public double GCodeFeedRate { get; set; } = 3000.0;
 
-        /// <summary>펀칭 유지 시간 (초) — G4 P 값</summary>
-        [XmlElement] public double GCodeDwellSeconds { get; set; } = 0.5;
+        /// <summary>핀 내려찍기 유지 시간 (초) — M3 후 G4 P 값 (XML 하위 호환: GCodeDwellSeconds)</summary>
+        [XmlElement("GCodeDwellSeconds")] public double PunchDwellSeconds { get; set; } = 0.5;
+
+        /// <summary>핀 복귀 대기 시간 (초) — M5 후 G4 P 값. 0이면 생략.</summary>
+        [XmlElement] public double RetractDwellSeconds { get; set; } = 0.1;
+
+        // ── 연속 스캔 모드 설정 ($32=1 레이저 모드 필요) ─────────────────────
+
+        /// <summary>스캔 이동 속도 (mm/min) — G1 F 값</summary>
+        [XmlElement] public double ScanFeedRate { get; set; } = 1000.0;
+
+        /// <summary>
+        /// M3 선발사 Offset (mm) — 목표 점 위치보다 이 거리만큼 앞에서 솔레노이드 ON.
+        /// 솔레노이드 전기적 지연을 보정. 이동 방향 기준.
+        /// </summary>
+        [XmlElement] public double ScanM3OffsetMm { get; set; } = 0.1;
+
+        /// <summary>
+        /// M5 후발사 Offset (mm) — 목표 점 위치를 지나 이 거리만큼 뒤에서 솔레노이드 OFF.
+        /// 핀이 충분히 종이를 눌렀다가 복귀하도록 보정. 이동 방향 기준.
+        /// </summary>
+        [XmlElement] public double ScanM5OffsetMm { get; set; } = 0.1;
+
+        // ── 기계 원점 오프셋 (단위: mm) ───────────────────────────────────────
+
+        /// <summary>홈 이후 X 원점 오프셋 (mm). G-Code 좌표 전체에 더해짐.</summary>
+        [XmlElement] public double OriginOffsetX { get; set; } = 0.0;
+
+        /// <summary>홈 이후 Y 원점 오프셋 (mm). G-Code 좌표 전체에 더해짐.</summary>
+        [XmlElement] public double OriginOffsetY { get; set; } = 0.0;
+
+        // ── 솔레노이드 설정 ───────────────────────────────────────────────
+
+        /// <summary>
+        /// 솔레노이드 반전 (B접점). true면 M3=OFF, M5=ON (NC 솔레노이드).
+        /// false(기본값)면 M3=ON, M5=OFF (NO 솔레노이드).
+        /// </summary>
+        [XmlElement] public bool SolenoidInvert { get; set; } = false;
 
         // ── 변환 엔진 설정 ────────────────────────────────────────────────
 

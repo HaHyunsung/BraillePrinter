@@ -22,8 +22,9 @@ namespace BraillePrinter.Services
         public bool IsConnected => _port is { IsOpen: true };
         public bool IsHomed { get; private set; }
 
-        public event Action<string>? LineReceived;
-        public event Action<string>? LineSent;
+        public event Action<string>? LineReceived;     // 명령 응답 (SendLine/SendQuery)
+        public event Action<string>? LineSent;         // 명령 전송
+        public event Action<string>? PollReceived;     // 폴링 상태 응답 (? 쿼리)
         public event Action<GrblState>? StateChanged;
         public event Action<string>? ErrorOccurred;
         public event Action<int>? AlarmOccurred;   // arg = alarm code (0 = unknown)
@@ -55,7 +56,12 @@ namespace BraillePrinter.Services
                 };
                 _port.Open();
 
-                Thread.Sleep(500);
+                // Arduino DTR 리셋 후 GRBL 부팅 대기 (최대 2초)
+                for (int i = 0; i < 8; i++)
+                {
+                    Thread.Sleep(250);
+                    if (_port.BytesToRead > 0) break;
+                }
                 if (_port.BytesToRead > 0)
                 {
                     string greeting = _port.ReadExisting();
@@ -129,6 +135,42 @@ namespace BraillePrinter.Services
             }
         }
 
+        // Sends a command and reads all lines until "ok" or "error" — logs each via LineReceived
+        public List<string>? SendQuery(string cmd)
+        {
+            lock (_portLock)
+            {
+                if (_port is not { IsOpen: true }) return null;
+
+                try
+                {
+                    _port.WriteLine(cmd);
+                    LineSent?.Invoke(cmd);
+
+                    var lines = new List<string>();
+                    while (true)
+                    {
+                        string line = _port.ReadLine().Trim();
+                        LineReceived?.Invoke(line);
+                        TryParseAlarmLine(line);
+                        lines.Add(line);
+                        if (line == "ok" || line.StartsWith("error")) break;
+                    }
+                    return lines;
+                }
+                catch (TimeoutException)
+                {
+                    ErrorOccurred?.Invoke($"응답 타임아웃: {cmd}");
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke($"송신 오류: {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
         public void SendRealtimeCommand(byte cmd)
         {
             lock (_portLock)
@@ -158,15 +200,21 @@ namespace BraillePrinter.Services
                     if (response.StartsWith('<') && response.EndsWith('>'))
                     {
                         ParseStatusResponse(response);
-                        LineReceived?.Invoke(response);
+                        PollReceived?.Invoke(response);
                     }
                     else
                     {
+                        // 폴링 중 예상치 못한 줄 (알람 메시지 등) → 명령 로그로
                         LineReceived?.Invoke(response);
                         TryParseAlarmLine(response);
                     }
 
                     return response;
+                }
+                catch (TimeoutException)
+                {
+                    PollReceived?.Invoke("[TIMEOUT] GRBL 응답 없음");
+                    return null;
                 }
                 catch { return null; }
             }
