@@ -179,18 +179,20 @@ namespace BraillePrinter.Services
             }
         }
 
+        // 실시간 명령(0x18 리셋, 0x21 홀드, 0x7E 사이클스타트, 0x85 조그취소, 0x3F 상태)은
+        // _portLock을 잡지 않고 BaseStream에 직접 1바이트를 쓴다.
+        // 작업 전송 루프가 SendLine의 ReadLine에서 ok를 기다리며 _portLock을 쥔 채 블로킹 중이어도
+        // 일시정지·재개·정지가 즉시 GRBL에 전달되어야 하기 때문. (SerialPort는 읽기/쓰기 동시 수행 안전)
         public void SendRealtimeCommand(byte cmd)
         {
-            lock (_portLock)
+            var port = _port;
+            if (port is not { IsOpen: true }) return;
+            try
             {
-                if (_port is not { IsOpen: true }) return;
-                try
-                {
-                    _port.BaseStream.WriteByte(cmd);
-                    LineSent?.Invoke($"[RT] 0x{cmd:X2}");
-                }
-                catch { }
+                port.BaseStream.WriteByte(cmd);
+                LineSent?.Invoke($"[RT] 0x{cmd:X2}");
             }
+            catch { }
         }
 
         public string? QueryStatus()
@@ -379,8 +381,16 @@ namespace BraillePrinter.Services
                 if (result.StartsWith("error"))       { ErrorOccurred?.Invoke($"홈잉 오류: {result}"); return false; }
                 if (result.StartsWith("ALARM"))       { ErrorOccurred?.Invoke($"홈잉 실패: {result}"); return false; }
 
-                // result == "ok" → 홈잉 완료, 현재 위치를 작업 원점으로 설정
-                SendLine("G10 L20 P1 X0 Y0");
+                // result == "ok" → 홈잉 완료, 현재 위치(용지 우측 상단 코너)를 작업 원점으로 설정 후
+                // 옵셋 지점(용지 코너, 여백 제외)으로 이동해 대기. 인쇄 시작 시 G-Code가 여백만큼 이동한다.
+                await Task.Run(() =>
+                {
+                    SendLine("G10 L20 P1 X0 Y0");
+                    var ic = System.Globalization.CultureInfo.InvariantCulture;
+                    string px = GCodeGenerator.ParkX.ToString("F3", ic);
+                    string py = GCodeGenerator.ParkY.ToString("F3", ic);
+                    SendLine($"G90 G0 X{px} Y{py}");
+                });
                 IsHomed = true;
                 UpdateState(GrblState.Idle);
                 return true;
@@ -412,44 +422,61 @@ namespace BraillePrinter.Services
 
             StopPolling();
 
+            // 작업 중에는 M3/M5 동기화·긴 급속이동·드웰 때문에 ok 응답이 늦게 올 수 있으므로
+            // 평소 2초 타임아웃을 크게 올린다 (홈잉과 동일한 방식). finally에서 원복.
+            int prevReadTimeout;
+            lock (_portLock)
+            {
+                prevReadTimeout = _port?.ReadTimeout ?? 2000;
+                if (_port is { IsOpen: true }) _port.ReadTimeout = 60_000;
+            }
+
             try
             {
-                for (int i = 0; i < gcodeLines.Count; i++)
+                return await Task.Run(() =>
                 {
-                    if (token.IsCancellationRequested) return false;
-
-                    string line = gcodeLines[i].Trim();
-                    if (string.IsNullOrEmpty(line) || line.StartsWith(';')) continue;
-
-                    string? resp = SendLine(line);
-
-                    if (resp == null)
+                    for (int i = 0; i < gcodeLines.Count; i++)
                     {
-                        ErrorOccurred?.Invoke($"라인 {i + 1} 응답 없음: {line}");
-                        return false;
+                        if (token.IsCancellationRequested) return false;
+
+                        string line = gcodeLines[i].Trim();
+                        if (string.IsNullOrEmpty(line) || line.StartsWith(';')) continue;
+
+                        string? resp = SendLine(line);
+
+                        if (resp == null)
+                        {
+                            ErrorOccurred?.Invoke($"라인 {i + 1} 응답 없음: {line}");
+                            return false;
+                        }
+
+                        if (resp.StartsWith("error"))
+                        {
+                            ErrorOccurred?.Invoke($"라인 {i + 1} 오류: {resp} ({line})");
+                            return false;
+                        }
+
+                        progress?.Report(i + 1);
                     }
 
-                    if (resp.StartsWith("error"))
+                    // Wait for machine to reach idle
+                    for (int i = 0; i < 300; i++)
                     {
-                        ErrorOccurred?.Invoke($"라인 {i + 1} 오류: {resp} ({line})");
-                        return false;
+                        if (token.IsCancellationRequested) break;
+                        Thread.Sleep(200);
+                        QueryStatus();
+                        if (State == GrblState.Idle) break;
                     }
 
-                    progress?.Report(i + 1);
-                }
-
-                // Wait for machine to reach idle
-                for (int i = 0; i < 300; i++)
-                {
-                    await Task.Delay(200, token);
-                    QueryStatus();
-                    if (State == GrblState.Idle) break;
-                }
-
-                return State == GrblState.Idle;
+                    return State == GrblState.Idle;
+                }, token);
             }
             finally
             {
+                lock (_portLock)
+                {
+                    if (_port is { IsOpen: true }) _port.ReadTimeout = prevReadTimeout;
+                }
                 StartPolling();
             }
         }

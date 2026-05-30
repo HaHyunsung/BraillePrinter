@@ -286,7 +286,10 @@ namespace BraillePrinter
             PathCanvas.Width = p.PaperWidth * scale;
             PathCanvas.Height = p.PaperHeight * scale;
 
-            DrawCellGuides(p, scale, PathCanvas, mirrorX: true);
+            // 실제 인쇄물(종이를 정상으로 읽는 면)과 동일한 방향으로 표시.
+            // 미러는 머신 좌표 생성 시에만 적용되고 종이에선 상쇄되므로 여기선 미러하지 않는다.
+            // → 인쇄 시작점(홈=용지 우측 상단 근처)이 화면 우측 상단(제일 우측 박스)에 보인다.
+            DrawCellGuides(p, scale, PathCanvas, mirrorX: false);
 
             foreach (var dot in dots)
             {
@@ -296,7 +299,7 @@ namespace BraillePrinter
                     Height = dotRadius * 2,
                     Fill = Brushes.DimGray,
                 };
-                Canvas.SetLeft(ellipse, (p.PaperWidth - dot.X) * scale - dotRadius);
+                Canvas.SetLeft(ellipse, dot.X * scale - dotRadius);
                 Canvas.SetTop(ellipse, dot.Y * scale - dotRadius);
                 PathCanvas.Children.Add(ellipse);
             }
@@ -306,12 +309,12 @@ namespace BraillePrinter
 
             var pathBrush = new SolidColorBrush(Color.FromArgb(140, 220, 50, 50));
 
-            double prevX = (p.PaperWidth - zigzag[0].X) * scale;
+            double prevX = zigzag[0].X * scale;
             double prevY = zigzag[0].Y * scale;
 
             for (int i = 1; i < zigzag.Count; i++)
             {
-                double cx = (p.PaperWidth - zigzag[i].X) * scale;
+                double cx = zigzag[i].X * scale;
                 double cy = zigzag[i].Y * scale;
 
                 PathCanvas.Children.Add(new Line
@@ -753,12 +756,17 @@ namespace BraillePrinter
         private void BtnPause_Click(object sender, RoutedEventArgs e)
         {
             _grbl.FeedHold();
+            // 인쇄 중에는 폴링이 꺼져 있어 Hold 상태가 자동 반영되지 않으므로 버튼을 직접 토글
+            BtnPause.IsEnabled  = false;
+            BtnResume.IsEnabled = true;
             StatusMessage.Text = "일시정지 명령 전송됨 (Feed Hold)";
         }
 
         private void BtnResume_Click(object sender, RoutedEventArgs e)
         {
             _grbl.CycleStart();
+            BtnResume.IsEnabled = false;
+            BtnPause.IsEnabled  = true;
             StatusMessage.Text = "재개 명령 전송됨 (Cycle Start)";
         }
 
@@ -795,7 +803,7 @@ namespace BraillePrinter
             return 1500;
         }
 
-        private void DoJog(string axis, int sign)
+        private async void DoJog(string axis, int sign)
         {
             if (!_grbl.IsConnected)
             {
@@ -810,7 +818,7 @@ namespace BraillePrinter
 
             double step = GetJogStep() * sign;
             double feed = GetJogFeed();
-            string? resp = _grbl.Jog(axis, step, feed);
+            string? resp = await Task.Run(() => _grbl.Jog(axis, step, feed));
 
             if (resp == null)
                 StatusMessage.Text = "Jog 명령 응답 없음";
@@ -847,7 +855,7 @@ namespace BraillePrinter
             StatusMessage.Text = "Jog 중지 명령 전송됨";
         }
 
-        private void BtnGoOrigin_Click(object sender, RoutedEventArgs e)
+        private async void BtnGoOrigin_Click(object sender, RoutedEventArgs e)
         {
             if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
             if (!_grbl.IsHomed)
@@ -856,11 +864,11 @@ namespace BraillePrinter
                                 "원점 이동", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-            string? resp = _grbl.SendLine("G90 G0 X0 Y0");
+            string? resp = await Task.Run(() => _grbl.SendLine("G90 G0 X0 Y0"));
             StatusMessage.Text = resp == null ? "응답 없음" : $"원점 이동: {resp}";
         }
 
-        private void BtnKillAlarmLock_Click(object sender, RoutedEventArgs e)
+        private async void BtnKillAlarmLock_Click(object sender, RoutedEventArgs e)
         {
             if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
             var result = MessageBox.Show(
@@ -868,7 +876,7 @@ namespace BraillePrinter
                 "알람 해제", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (result != MessageBoxResult.Yes) return;
 
-            string? resp = _grbl.KillAlarmLock();
+            string? resp = await Task.Run(() => _grbl.KillAlarmLock());
             StatusMessage.Text = resp == null ? "응답 없음" : $"$X: {resp}";
         }
 
