@@ -410,6 +410,17 @@
                                            FontSize="11" Foreground="#777" Margin="6,0,0,0"/>
                             </StackPanel>
 
+                            <!-- 홈 센서 상태 -->
+                            <TextBlock Text="홈 센서 상태" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <Ellipse x:Name="LedHomePinX" Width="14" Height="14"
+                                         Fill="#BDBDBD" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="X-MIN" FontSize="12" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                                <Ellipse x:Name="LedHomePinY" Width="14" Height="14"
+                                         Fill="#BDBDBD" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Y-MIN" FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+
                             <!-- 방향 버튼 (D-Pad 레이아웃) -->
                             <TextBlock Text="방향" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6"/>
                             <Grid HorizontalAlignment="Left" Margin="0,0,0,14">
@@ -579,7 +590,7 @@
                                 <Border DockPanel.Dock="Top" Background="#F5F5F5"
                                         BorderBrush="#CCC" BorderThickness="0,0,0,1" Padding="8,3">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="폴링 상태 (?)" FontWeight="SemiBold"
+                                        <TextBlock Text="폴링 상태" FontWeight="SemiBold"
                                                    VerticalAlignment="Center" Margin="0,0,10,0"/>
                                         <Button Content="지우기" Padding="8,1" Cursor="Hand"
                                                 Click="BtnClearPollLog2_Click"/>
@@ -598,6 +609,66 @@
                             </DockPanel>
                         </Grid>
                     </Grid>
+                </TabItem>
+
+                <!-- 탭6: GRBL 터미널 -->
+                <TabItem Header="터미널">
+                    <DockPanel>
+                        <!-- 헤더 -->
+                        <Border DockPanel.Dock="Top" Background="#F5F5F5" Padding="8,4"
+                                BorderBrush="#CCC" BorderThickness="0,0,0,1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="GRBL 터미널" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <Button Content="지우기" Padding="10,2" Cursor="Hand"
+                                        Click="BtnClearTerminal_Click"/>
+                                <TextBlock Text="연결 상태에서 GRBL 명령어를 직접 입력합니다. Enter 또는 전송 버튼. ↑↓ 키로 이전 명령 탐색."
+                                           FontSize="10" Foreground="#888"
+                                           VerticalAlignment="Center" Margin="12,0,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 입력 행 -->
+                        <Border DockPanel.Dock="Bottom" Background="#2A2A2A" Padding="8,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="TxtTerminalInput"
+                                         Grid.Column="0"
+                                         FontFamily="Consolas, Courier New"
+                                         FontSize="13"
+                                         Background="#1A1A1A" Foreground="#E0E0E0"
+                                         CaretBrush="#E0E0E0"
+                                         BorderBrush="#555" BorderThickness="1"
+                                         Padding="6,4"
+                                         VerticalContentAlignment="Center"
+                                         KeyDown="TxtTerminalInput_KeyDown"/>
+                                <Button x:Name="BtnTerminalSend"
+                                        Grid.Column="1"
+                                        Content="전송"
+                                        Margin="6,0,0,0"
+                                        Padding="16,4"
+                                        Background="#1565C0" Foreground="White"
+                                        FontSize="12"
+                                        Cursor="Hand"
+                                        Click="BtnTerminalSend_Click"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- 출력 영역 -->
+                        <TextBox x:Name="TxtTerminalLog"
+                                 IsReadOnly="True"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas, Courier New"
+                                 FontSize="12"
+                                 Background="#1E1E1E"
+                                 Foreground="#DCDCDC"
+                                 Padding="8"
+                                 TextWrapping="NoWrap"/>
+                    </DockPanel>
                 </TabItem>
 
                 <TabItem Header="통신 로그">
@@ -640,7 +711,7 @@
                             <Border DockPanel.Dock="Top" Background="#F5F5F5" Padding="8,4"
                                     BorderBrush="#CCC" BorderThickness="0,0,0,1">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="폴링 상태  (? 자동 쿼리)"
+                                    <TextBlock Text="폴링 상태  (? 명령 자동 쿼리)"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center" Margin="0,0,12,0"/>
                                     <Button Content="지우기" Padding="10,2" Cursor="Hand"

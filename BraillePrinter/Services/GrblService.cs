@@ -1,5 +1,6 @@
 using System.IO.Ports;
 using System.Text.RegularExpressions;
+using BraillePrinter.Models;
 
 namespace BraillePrinter.Services
 {
@@ -28,11 +29,18 @@ namespace BraillePrinter.Services
         public event Action<GrblState>? StateChanged;
         public event Action<string>? ErrorOccurred;
         public event Action<int>? AlarmOccurred;   // arg = alarm code (0 = unknown)
+        public event Action<bool, bool>? HomePinsChanged;  // (xTriggered, yTriggered)
+
+        public bool HomePinX { get; private set; }
+        public bool HomePinY { get; private set; }
 
         public int AlarmCode { get; private set; }
 
         private static readonly Regex StateRegex =
-            new(@"<(\w+)(?::[\d])?[|]MPos:([\-\d.,]+)", RegexOptions.Compiled);
+            new(@"<(\w+)(?::[\d])?[|][MW]Pos:([\-\d.,]+)", RegexOptions.Compiled);
+
+        private static readonly Regex PinRegex =
+            new(@"\|Pn:([XYZPDHS]+)", RegexOptions.Compiled);
 
         private static readonly Regex AlarmLineRegex =
             new(@"ALARM:(\d+)", RegexOptions.Compiled);
@@ -227,6 +235,18 @@ namespace BraillePrinter.Services
 
             MachinePosition = match.Groups[2].Value;
 
+            // Parse Pn: pin state field
+            var pinMatch = PinRegex.Match(response);
+            string pins = pinMatch.Success ? pinMatch.Groups[1].Value : "";
+            bool newX = pins.Contains('X');
+            bool newY = pins.Contains('Y');
+            if (newX != HomePinX || newY != HomePinY)
+            {
+                HomePinX = newX;
+                HomePinY = newY;
+                HomePinsChanged?.Invoke(newX, newY);
+            }
+
             var newState = match.Groups[1].Value switch
             {
                 "Idle" => GrblState.Idle,
@@ -308,36 +328,67 @@ namespace BraillePrinter.Services
             if (State == GrblState.Alarm)
             {
                 SendRealtimeCommand(0x18); // Ctrl-X soft reset
-                await Task.Delay(1000);
+                await Task.Delay(2000);   // GRBL 재부팅 대기
             }
 
-            string? resp = SendLine("$H");
-
-            if (resp == null)
+            StopPolling();
+            try
             {
-                ErrorOccurred?.Invoke("홈잉 명령 응답 없음");
-                return false;
-            }
-
-            if (resp.StartsWith("error"))
-            {
-                ErrorOccurred?.Invoke($"홈잉 오류: {resp}");
-                return false;
-            }
-
-            for (int i = 0; i < 100; i++)
-            {
-                await Task.Delay(200);
-                QueryStatus();
-                if (State == GrblState.Idle)
+                // 수신 버퍼에 남은 폴링 응답 제거
+                lock (_portLock)
                 {
-                    IsHomed = true;
-                    return true;
+                    if (_port is { IsOpen: true })
+                        _port.DiscardInBuffer();
                 }
-            }
 
-            ErrorOccurred?.Invoke("홈잉 타임아웃 (20초)");
-            return false;
+                // $H 전송 후 ok/error/ALARM 까지 대기 (최대 120초)
+                string? result = await Task.Run(() =>
+                {
+                    lock (_portLock)
+                    {
+                        if (_port is not { IsOpen: true }) return null;
+                        try
+                        {
+                            int prevTimeout = _port.ReadTimeout;
+                            _port.ReadTimeout = 120_000;
+                            _port.WriteLine("$H");
+                            LineSent?.Invoke("$H");
+
+                            while (true)
+                            {
+                                string line = _port.ReadLine().Trim();
+                                if (string.IsNullOrEmpty(line)) continue;
+                                LineReceived?.Invoke(line);
+                                TryParseAlarmLine(line);
+                                if (line == "ok" || line.StartsWith("error") || line.StartsWith("ALARM"))
+                                {
+                                    _port.ReadTimeout = prevTimeout;
+                                    return line;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ErrorOccurred?.Invoke($"홈잉 오류: {ex.Message}");
+                            return null;
+                        }
+                    }
+                });
+
+                if (result == null)                   { ErrorOccurred?.Invoke("홈잉 응답 없음"); return false; }
+                if (result.StartsWith("error"))       { ErrorOccurred?.Invoke($"홈잉 오류: {result}"); return false; }
+                if (result.StartsWith("ALARM"))       { ErrorOccurred?.Invoke($"홈잉 실패: {result}"); return false; }
+
+                // result == "ok" → 홈잉 완료, 현재 위치를 작업 원점으로 설정
+                SendLine("G10 L20 P1 X0 Y0");
+                IsHomed = true;
+                UpdateState(GrblState.Idle);
+                return true;
+            }
+            finally
+            {
+                StartPolling();
+            }
         }
 
         // ── Job execution (Simple Send-Response) ────────────
@@ -434,6 +485,79 @@ namespace BraillePrinter.Services
 
         // Kill alarm lock without rehoming ($X). Use with caution — position becomes unreliable.
         public string? KillAlarmLock() => SendLine("$X");
+
+        // ── GRBL Settings ─────────────────────────────────────────────────
+
+        // Sends $0~$1 and $100~$131 machine parameters from BrailleParameters to GRBL EEPROM.
+        // Waits for GRBL to finish booting (leave Unknown state) before writing.
+        public async Task<bool> ApplySettingsAsync(BrailleParameters p)
+        {
+            if (!IsConnected)
+            {
+                ErrorOccurred?.Invoke("설정 전송 실패: GRBL 미연결");
+                return false;
+            }
+
+            // Wait up to 10 seconds for GRBL to leave Unknown state.
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (State == GrblState.Unknown && DateTime.UtcNow < deadline)
+                await Task.Delay(200);
+
+            if (!IsConnected || State == GrblState.Unknown)
+            {
+                ErrorOccurred?.Invoke("설정 전송 실패: GRBL 초기화 타임아웃 (10초)");
+                return false;
+            }
+
+            // Alarm 상태여도 $ 설정 명령은 수락됨 — 그대로 진행
+
+
+            StopPolling();
+            try
+            {
+                var ic = System.Globalization.CultureInfo.InvariantCulture;
+                string[] cmds =
+                [
+                    "$10=0",                                    // status report: WPos
+                    $"$0={p.StepPulseUs}",
+                    $"$1={p.StepIdleDelayMs}",
+                    $"$3={p.DirectionInvert}",
+                    $"$5={p.LimitPinsInvert}",
+                    $"$21={p.HardLimitsEnable}",
+                    $"$22={p.HomingEnable}",
+                    $"$23={p.HomingDirMask}",
+                    $"$24={p.HomingFeedRate.ToString("F0", ic)}",
+                    $"$25={p.HomingSeekRate.ToString("F0", ic)}",
+                    $"$26={p.HomingDebounce}",
+                    $"$27={p.HomingPullOff.ToString("F1", ic)}",
+                    $"$100={p.StepsPerMmX.ToString("F6", ic)}",
+                    $"$101={p.StepsPerMmY.ToString("F6", ic)}",
+                    $"$110={p.MaxRateX.ToString("F0", ic)}",
+                    $"$111={p.MaxRateY.ToString("F0", ic)}",
+                    $"$120={p.AccelerationX.ToString("F0", ic)}",
+                    $"$121={p.AccelerationY.ToString("F0", ic)}",
+                    $"$130={p.MaxTravelX.ToString("F0", ic)}",
+                    $"$131={p.MaxTravelY.ToString("F0", ic)}",
+                ];
+
+                foreach (string cmd in cmds)
+                {
+                    string? resp = await Task.Run(() => SendLine(cmd));
+                    if (resp == null || resp.StartsWith("error"))
+                    {
+                        ErrorOccurred?.Invoke($"설정 실패 [{cmd}]: {resp ?? "응답 없음"}");
+                        return false;
+                    }
+                }
+
+                LineReceived?.Invoke("[설정 완료] GRBL 파라미터가 EEPROM에 저장되었습니다.");
+                return true;
+            }
+            finally
+            {
+                StartPolling();
+            }
+        }
 
         public void Dispose()
         {

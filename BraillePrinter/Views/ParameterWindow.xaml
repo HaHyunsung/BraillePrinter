@@ -286,6 +286,140 @@
                 <TextBlock Text="※ A접점(NO, 기본): M3=ON, M5=OFF  /  B접점(NC): M3=OFF, M5=ON"
                            FontSize="10" Foreground="#777" Margin="0,2,0,0"/>
 
+                <!-- GRBL 기계 설정 -->
+                <TextBlock Style="{StaticResource SectionLabel}" Text="GRBL 기계 설정 (연결 시 자동 전송)"/>
+                <Separator Margin="0,0,0,8"/>
+                <TextBlock Text="연결 직후 아래 값들이 GRBL EEPROM에 자동 저장됩니다. 분해능은 드라이버 마이크로스텝에 맞게 설정하세요."
+                           FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="하드 리밋 사용  ($21)"/>
+                    <TextBox x:Name="TbHardLimitsEnable" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="0/1"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="리밋 스위치 없으면 0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="홈잉 사용  ($22)"/>
+                    <TextBox x:Name="TbHomingEnable" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="0/1"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="홈 센서 없으면 0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="홈 방향 반전  ($23)"/>
+                    <TextBox x:Name="TbHomingDirMask" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="마스크"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="0=Min방향(기본)  X=1  Y=2  XY=3"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="홈 탐색 속도  ($25)"/>
+                    <TextBox x:Name="TbHomingSeekRate" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm/min"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="1차 고속 탐색. 권장: 200~1000"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="홈 확인 속도  ($24)"/>
+                    <TextBox x:Name="TbHomingFeedRate" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm/min"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="2차 저속 정밀 확인. 권장: 10~50"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="홈 디바운스  ($26)"/>
+                    <TextBox x:Name="TbHomingDebounce" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="ms"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="스위치 채터링 방지. 기본: 250"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="홈 풀오프  ($27)"/>
+                    <TextBox x:Name="TbHomingPullOff" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="스위치에서 후퇴 거리. 기본: 1.0"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="스텝 펄스 폭  ($0)"/>
+                    <TextBox x:Name="TbStepPulseUs" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="μs"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="기본: 10 / A4988 최소: 2"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="모터 유지 시간  ($1)"/>
+                    <TextBox x:Name="TbStepIdleDelayMs" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="ms"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="255 = 항상 통전 (펀칭 중 위치 유지 권장)"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="X steps/mm  ($100)"/>
+                    <TextBox x:Name="TbStepsPerMmX" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="steps/mm"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="벨트GT2 20T 1/8: 80 / 리드스크류2mm 1/8: 800"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="Y steps/mm  ($101)"/>
+                    <TextBox x:Name="TbStepsPerMmY" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="steps/mm"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="X 최대 속도  ($110)"/>
+                    <TextBox x:Name="TbMaxRateX" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm/min"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="권장: 1000 ~ 5000"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="Y 최대 속도  ($111)"/>
+                    <TextBox x:Name="TbMaxRateY" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm/min"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="X 가속도  ($120)"/>
+                    <TextBox x:Name="TbAccelerationX" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm/sec²"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="권장: 50 ~ 500"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="Y 가속도  ($121)"/>
+                    <TextBox x:Name="TbAccelerationY" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm/sec²"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="X 최대 이동 거리  ($130)"/>
+                    <TextBox x:Name="TbMaxTravelX" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="Y 최대 이동 거리  ($131)"/>
+                    <TextBox x:Name="TbMaxTravelY" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="mm"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="축 방향 반전  ($3)"/>
+                    <CheckBox x:Name="ChkInvertX" Content="X" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                    <CheckBox x:Name="ChkInvertY" Content="Y" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="X=1, Y=2, 둘 다=3"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="리밋 핀 반전  ($5)"/>
+                    <CheckBox x:Name="ChkLimitInvertX" Content="X" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                    <CheckBox x:Name="ChkLimitInvertY" Content="Y" VerticalAlignment="Center"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="NC 센서면 체크. NO면 그대로"/>
+                </StackPanel>
+
                 <!-- 변환 엔진 -->
                 <TextBlock Style="{StaticResource SectionLabel}" Text="변환 엔진"/>
                 <Separator Margin="0,0,0,8"/>

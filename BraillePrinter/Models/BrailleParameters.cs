@@ -105,6 +105,65 @@ namespace BraillePrinter.Models
         /// </summary>
         [XmlElement] public bool SolenoidInvert { get; set; } = false;
 
+        // ── GRBL 기계 설정 ($1xx, 연결 시 자동 전송) ─────────────────────────
+
+        /// <summary>스텝 펄스 폭 μs ($0). 드라이버 최소 인식 시간. 기본 10.</summary>
+        [XmlElement] public int StepPulseUs     { get; set; } = 10;
+
+        /// <summary>정지 후 모터 코일 유지 ms ($1). 255 = 항상 통전 (위치 유지).</summary>
+        [XmlElement] public int StepIdleDelayMs { get; set; } = 255;
+
+        /// <summary>하드 리밋 스위치 사용 여부 ($21). 스위치 없으면 0.</summary>
+        [XmlElement] public int HardLimitsEnable { get; set; } = 0;
+
+        /// <summary>홈잉 사이클 사용 여부 ($22). 홈 센서 없으면 0.</summary>
+        [XmlElement] public int HomingEnable { get; set; } = 0;
+
+        /// <summary>홈 방향 반전 마스크 ($23). X=1, Y=2, XY=3. 0이면 Min 방향(기본).</summary>
+        [XmlElement] public int HomingDirMask { get; set; } = 0;
+
+        /// <summary>홈 위치 확인 속도 mm/min ($24). 저속 2차 접근.</summary>
+        [XmlElement] public double HomingFeedRate { get; set; } = 25.0;
+
+        /// <summary>홈 탐색 속도 mm/min ($25). 고속 1차 탐색.</summary>
+        [XmlElement] public double HomingSeekRate { get; set; } = 500.0;
+
+        /// <summary>홈 스위치 디바운스 ms ($26).</summary>
+        [XmlElement] public int HomingDebounce { get; set; } = 250;
+
+        /// <summary>홈 풀오프 거리 mm ($27). 스위치에서 물러나는 거리.</summary>
+        [XmlElement] public double HomingPullOff { get; set; } = 1.0;
+
+        /// <summary>X축 분해능 steps/mm ($100). 계산: 모터스텝×마이크로스텝 / 피치.</summary>
+        [XmlElement] public double StepsPerMmX  { get; set; } = 80.0;
+
+        /// <summary>Y축 분해능 steps/mm ($101).</summary>
+        [XmlElement] public double StepsPerMmY  { get; set; } = 80.0;
+
+        /// <summary>X축 최대 속도 mm/min ($110).</summary>
+        [XmlElement] public double MaxRateX     { get; set; } = 3000.0;
+
+        /// <summary>Y축 최대 속도 mm/min ($111).</summary>
+        [XmlElement] public double MaxRateY     { get; set; } = 3000.0;
+
+        /// <summary>X축 가속도 mm/sec² ($120).</summary>
+        [XmlElement] public double AccelerationX { get; set; } = 300.0;
+
+        /// <summary>Y축 가속도 mm/sec² ($121).</summary>
+        [XmlElement] public double AccelerationY { get; set; } = 300.0;
+
+        /// <summary>X축 최대 이동 거리 mm ($130).</summary>
+        [XmlElement] public double MaxTravelX   { get; set; } = 220.0;
+
+        /// <summary>Y축 최대 이동 거리 mm ($131).</summary>
+        [XmlElement] public double MaxTravelY   { get; set; } = 310.0;
+
+        /// <summary>축 방향 반전 비트마스크 ($3). X=1, Y=2, XY=3.</summary>
+        [XmlElement] public int DirectionInvert { get; set; } = 0;
+
+        /// <summary>리밋 핀 반전 비트마스크 ($5). NO=0, NC=반전. X=1, Y=2, XY=3.</summary>
+        [XmlElement] public int LimitPinsInvert { get; set; } = 0;
+
         // ── 변환 엔진 설정 ────────────────────────────────────────────────
 
         /// <summary>사용할 변환 엔진 (Manual / LibLouis)</summary>

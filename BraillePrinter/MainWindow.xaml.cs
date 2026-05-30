@@ -43,6 +43,7 @@ namespace BraillePrinter
             _grbl.PollReceived += OnGrblPollReceived;
             _grbl.ErrorOccurred += OnGrblError;
             _grbl.AlarmOccurred += OnGrblAlarm;
+            _grbl.HomePinsChanged += OnHomePinsChanged;
 
             ApplyCanvasSize();
             UpdateStatusBar();
@@ -465,7 +466,7 @@ namespace BraillePrinter
             RefreshPorts();
         }
 
-        private void BtnConnect_Click(object sender, RoutedEventArgs e)
+        private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
             if (_grbl.IsConnected)
             {
@@ -482,13 +483,28 @@ namespace BraillePrinter
                 return;
             }
 
+            BtnConnect.IsEnabled = false;
             StatusMessage.Text = $"{portName} 연결 중...";
 
-            if (_grbl.Connect(portName))
+            try
             {
-                BtnConnect.Content = "연결 해제";
-                BtnConnect.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#757575"));
-                StatusMessage.Text = $"{portName} 연결됨 — HOME을 실행하세요.";
+                if (_grbl.Connect(portName))
+                {
+                    BtnConnect.Content = "연결 해제";
+                    BtnConnect.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#757575"));
+                    StatusMessage.Text = "GRBL 설정 전송 중...";
+
+                    var p = ParameterManager.Instance.Parameters;
+                    bool ok = await _grbl.ApplySettingsAsync(p);
+
+                    StatusMessage.Text = ok
+                        ? $"{portName} 연결됨 — 설정 완료. HOME을 실행하세요."
+                        : $"{portName} 연결됨 — 설정 전송 실패. 로그를 확인하세요.";
+                }
+            }
+            finally
+            {
+                BtnConnect.IsEnabled = true;
             }
         }
 
@@ -617,6 +633,8 @@ namespace BraillePrinter
             TxtSerialLog.ScrollToEnd();
             TxtSerialLog2.AppendText(line);
             TxtSerialLog2.ScrollToEnd();
+            TxtTerminalLog.AppendText(line);
+            TxtTerminalLog.ScrollToEnd();
         }
 
         private void AppendPollLog(string text)
@@ -631,6 +649,19 @@ namespace BraillePrinter
         private void OnGrblPollReceived(string line)
         {
             Dispatcher.InvokeAsync(() => AppendPollLog(line));
+        }
+
+        private void OnHomePinsChanged(bool x, bool y)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                LedHomePinX.Fill = x
+                    ? new SolidColorBrush(Color.FromRgb(0x43, 0xA0, 0x47))  // 초록
+                    : new SolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD)); // 회색
+                LedHomePinY.Fill = y
+                    ? new SolidColorBrush(Color.FromRgb(0x43, 0xA0, 0x47))
+                    : new SolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD));
+            });
         }
 
         private void BtnClearSerialLog2_Click(object sender, RoutedEventArgs e) => TxtSerialLog2.Clear();
@@ -877,6 +908,84 @@ namespace BraillePrinter
             if (!_grbl.IsConnected) { StatusMessage.Text = "GRBL 미연결 상태입니다."; return; }
             _grbl.SoftReset();
             StatusMessage.Text = "소프트 리셋 전송됨 (Ctrl-X)";
+        }
+
+        // ── 터미널 ────────────────────────────────────────────
+
+        private readonly List<string> _terminalHistory = new();
+        private int _terminalHistoryIndex = -1;
+
+        private void BtnClearTerminal_Click(object sender, RoutedEventArgs e) => TxtTerminalLog.Clear();
+
+        private void TxtTerminalInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case System.Windows.Input.Key.Enter:
+                    SendTerminalCommand();
+                    e.Handled = true;
+                    break;
+                case System.Windows.Input.Key.Up:
+                    if (_terminalHistory.Count > 0)
+                    {
+                        _terminalHistoryIndex = Math.Min(_terminalHistoryIndex + 1, _terminalHistory.Count - 1);
+                        TxtTerminalInput.Text = _terminalHistory[_terminalHistoryIndex];
+                        TxtTerminalInput.CaretIndex = TxtTerminalInput.Text.Length;
+                    }
+                    e.Handled = true;
+                    break;
+                case System.Windows.Input.Key.Down:
+                    if (_terminalHistoryIndex > 0)
+                    {
+                        _terminalHistoryIndex--;
+                        TxtTerminalInput.Text = _terminalHistory[_terminalHistoryIndex];
+                        TxtTerminalInput.CaretIndex = TxtTerminalInput.Text.Length;
+                    }
+                    else
+                    {
+                        _terminalHistoryIndex = -1;
+                        TxtTerminalInput.Clear();
+                    }
+                    e.Handled = true;
+                    break;
+            }
+        }
+
+        private void BtnTerminalSend_Click(object sender, RoutedEventArgs e) => SendTerminalCommand();
+
+        private async void SendTerminalCommand()
+        {
+            string cmd = TxtTerminalInput.Text.Trim();
+            if (string.IsNullOrEmpty(cmd)) return;
+
+            if (!_grbl.IsConnected)
+            {
+                AppendSerialLog("[터미널] GRBL 미연결 상태입니다.");
+                return;
+            }
+
+            // 히스토리 저장 (중복 연속 방지)
+            if (_terminalHistory.Count == 0 || _terminalHistory[0] != cmd)
+            {
+                _terminalHistory.Insert(0, cmd);
+                if (_terminalHistory.Count > 50)
+                    _terminalHistory.RemoveAt(50);
+            }
+            _terminalHistoryIndex = -1;
+            TxtTerminalInput.Clear();
+
+            // 실시간 단일 바이트 명령
+            switch (cmd)
+            {
+                case "!":  _grbl.FeedHold();   return;
+                case "~":  _grbl.CycleStart(); return;
+                case "?":  await Task.Run(() => _grbl.QueryStatus()); return;
+                case "" or "ctrl-x" or "Ctrl-X":
+                    _grbl.SoftReset(); return;
+            }
+
+            // 일반 명령: SendQuery로 ok/error까지 전체 응답 수신
+            await Task.Run(() => _grbl.SendQuery(cmd));
         }
 
         // ── Window close cleanup ─────────────────────────────

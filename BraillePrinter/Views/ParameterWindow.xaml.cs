@@ -49,6 +49,29 @@ namespace BraillePrinter.Views
             // 솔레노이드
             ChkSolenoidInvert.IsChecked = p.SolenoidInvert;
 
+            // GRBL 기계 설정
+            TbHardLimitsEnable.Text = p.HardLimitsEnable.ToString();
+            TbHomingEnable.Text     = p.HomingEnable.ToString();
+            TbHomingDirMask.Text    = p.HomingDirMask.ToString();
+            TbHomingSeekRate.Text   = p.HomingSeekRate.ToString("F0");
+            TbHomingFeedRate.Text   = p.HomingFeedRate.ToString("F0");
+            TbHomingDebounce.Text   = p.HomingDebounce.ToString();
+            TbHomingPullOff.Text    = p.HomingPullOff.ToString("F1");
+            TbStepPulseUs.Text      = p.StepPulseUs.ToString();
+            TbStepIdleDelayMs.Text  = p.StepIdleDelayMs.ToString();
+            TbStepsPerMmX.Text   = p.StepsPerMmX.ToString("F6");
+            TbStepsPerMmY.Text   = p.StepsPerMmY.ToString("F6");
+            TbMaxRateX.Text      = p.MaxRateX.ToString("F0");
+            TbMaxRateY.Text      = p.MaxRateY.ToString("F0");
+            TbAccelerationX.Text = p.AccelerationX.ToString("F0");
+            TbAccelerationY.Text = p.AccelerationY.ToString("F0");
+            TbMaxTravelX.Text    = p.MaxTravelX.ToString("F0");
+            TbMaxTravelY.Text    = p.MaxTravelY.ToString("F0");
+            ChkInvertX.IsChecked      = (p.DirectionInvert  & 1) != 0;
+            ChkInvertY.IsChecked      = (p.DirectionInvert  & 2) != 0;
+            ChkLimitInvertX.IsChecked = (p.LimitPinsInvert  & 1) != 0;
+            ChkLimitInvertY.IsChecked = (p.LimitPinsInvert  & 2) != 0;
+
             // 출력 모드
             RbStopAndPunch.IsChecked   = p.PrintMode == PrintMode.StopAndPunch;
             RbContinuousScan.IsChecked = p.PrintMode == PrintMode.ContinuousScan;
@@ -204,6 +227,29 @@ namespace BraillePrinter.Views
             double originOffsetY = ParseAny(TbOriginOffsetY.Text, "Y 오프셋", errors);
             bool solenoidInvert  = ChkSolenoidInvert.IsChecked == true;
 
+            // GRBL 기계 설정
+            int hardLimitsEnable = ParseInt(TbHardLimitsEnable.Text, "하드 리밋 사용", 0, 1, errors);
+            int homingEnable     = ParseInt(TbHomingEnable.Text,     "홈잉 사용",     0, 1, errors);
+            int homingDirMask    = ParseInt(TbHomingDirMask.Text,    "홈 방향 반전",  0, 7, errors);
+            double homingSeekRate = ParsePositive(TbHomingSeekRate.Text, "홈 탐색 속도", errors);
+            double homingFeedRate = ParsePositive(TbHomingFeedRate.Text, "홈 확인 속도", errors);
+            int homingDebounce   = ParseInt(TbHomingDebounce.Text,   "홈 디바운스",   0, 9999, errors);
+            double homingPullOff  = ParsePositive(TbHomingPullOff.Text,  "홈 풀오프",    errors);
+            int stepPulseUs      = ParseInt(TbStepPulseUs.Text,     "스텝 펄스 폭", 1, 255, errors);
+            int stepIdleDelayMs  = ParseInt(TbStepIdleDelayMs.Text, "모터 유지 시간", 0, 255, errors);
+            double stepsPerMmX   = ParsePositive(TbStepsPerMmX.Text,   "X steps/mm",       errors);
+            double stepsPerMmY   = ParsePositive(TbStepsPerMmY.Text,   "Y steps/mm",       errors);
+            double maxRateX      = ParsePositive(TbMaxRateX.Text,      "X 최대 속도",       errors);
+            double maxRateY      = ParsePositive(TbMaxRateY.Text,      "Y 최대 속도",       errors);
+            double accelerationX = ParsePositive(TbAccelerationX.Text, "X 가속도",          errors);
+            double accelerationY = ParsePositive(TbAccelerationY.Text, "Y 가속도",          errors);
+            double maxTravelX    = ParsePositive(TbMaxTravelX.Text,    "X 최대 이동 거리",   errors);
+            double maxTravelY    = ParsePositive(TbMaxTravelY.Text,    "Y 최대 이동 거리",   errors);
+            int directionInvert  = ((ChkInvertX.IsChecked      == true) ? 1 : 0) |
+                                   ((ChkInvertY.IsChecked      == true) ? 2 : 0);
+            int limitPinsInvert  = ((ChkLimitInvertX.IsChecked == true) ? 1 : 0) |
+                                   ((ChkLimitInvertY.IsChecked == true) ? 2 : 0);
+
             if (errors.Count > 0) { ShowError(string.Join("\n", errors)); return false; }
 
             if (marginLeft + marginRight >= paperWidth)
@@ -255,6 +301,25 @@ namespace BraillePrinter.Views
                 OriginOffsetX   = originOffsetX,
                 OriginOffsetY   = originOffsetY,
                 SolenoidInvert  = solenoidInvert,
+                HardLimitsEnable = hardLimitsEnable,
+                HomingEnable     = homingEnable,
+                HomingDirMask    = homingDirMask,
+                HomingSeekRate   = homingSeekRate,
+                HomingFeedRate   = homingFeedRate,
+                HomingDebounce   = homingDebounce,
+                HomingPullOff    = homingPullOff,
+                StepPulseUs     = stepPulseUs,
+                StepIdleDelayMs = stepIdleDelayMs,
+                StepsPerMmX     = stepsPerMmX,
+                StepsPerMmY     = stepsPerMmY,
+                MaxRateX        = maxRateX,
+                MaxRateY        = maxRateY,
+                AccelerationX   = accelerationX,
+                AccelerationY   = accelerationY,
+                MaxTravelX      = maxTravelX,
+                MaxTravelY      = maxTravelY,
+                DirectionInvert  = directionInvert,
+                LimitPinsInvert  = limitPinsInvert,
                 ConverterType           = converterType,
                 LibLouisTable           = libLouisTable,
             };
@@ -278,6 +343,13 @@ namespace BraillePrinter.Views
                                 System.Globalization.CultureInfo.InvariantCulture, out double v)) return v;
             errors.Add($"'{name}'에 숫자를 입력하세요.");
             return 0;
+        }
+
+        private static int ParseInt(string text, string name, int min, int max, List<string> errors)
+        {
+            if (int.TryParse(text, out int v) && v >= min && v <= max) return v;
+            errors.Add($"'{name}'에 {min}~{max} 사이의 정수를 입력하세요.");
+            return min;
         }
 
         private static double ParseNonNeg(string text, string name, List<string> errors)

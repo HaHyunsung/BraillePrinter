@@ -11,9 +11,6 @@ namespace BraillePrinter.Managers
     /// </summary>
     public sealed class ParameterManager
     {
-        // ── 싱글톤 ───────────────────────────────────────────────────────
-        public static readonly ParameterManager Instance = new();
-
         // ── 저장 경로 ─────────────────────────────────────────────────────
         private static readonly string ConfigDirectory =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -24,6 +21,9 @@ namespace BraillePrinter.Managers
 
         private static readonly XmlSerializer Serializer =
             new(typeof(BrailleParameters));
+
+        // ── 싱글톤 (경로/직렬화기 초기화 후에 와야 함) ───────────────────────
+        public static readonly ParameterManager Instance = new();
 
         // ── 공개 인터페이스 ───────────────────────────────────────────────
 
@@ -83,7 +83,14 @@ namespace BraillePrinter.Managers
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ParameterManager] 로드 오류: {ex.Message}");
+                try
+                {
+                    Directory.CreateDirectory(ConfigDirectory);
+                    File.WriteAllText(
+                        Path.Combine(ConfigDirectory, "load_error.txt"),
+                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+                }
+                catch { }
                 Parameters = new BrailleParameters();
             }
         }
