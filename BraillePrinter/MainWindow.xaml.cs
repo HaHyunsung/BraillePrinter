@@ -228,7 +228,7 @@ namespace BraillePrinter
             UpdatePrintButtonState();
         }
 
-        private void DrawCellGuides(BrailleParameters p, double scale, Canvas? target = null)
+        private void DrawCellGuides(BrailleParameters p, double scale, Canvas? target = null, bool mirrorX = false)
         {
             target ??= BrailleCanvas;
 
@@ -245,7 +245,10 @@ namespace BraillePrinter
             {
                 for (int col = 0; col < cellsPerLine; col++)
                 {
-                    double x = (p.EffectiveMarginLeft + col * p.CellSpacing) * scale;
+                    double rawX = p.EffectiveMarginLeft + col * p.CellSpacing;
+                    double x = mirrorX
+                        ? (p.PaperWidth - rawX - p.CellSpacing) * scale
+                        : rawX * scale;
                     double y = (p.EffectiveMarginTop + row * p.LineSpacing) * scale;
 
                     var cellRect = new Rectangle
@@ -283,7 +286,7 @@ namespace BraillePrinter
             PathCanvas.Width = p.PaperWidth * scale;
             PathCanvas.Height = p.PaperHeight * scale;
 
-            DrawCellGuides(p, scale, PathCanvas);
+            DrawCellGuides(p, scale, PathCanvas, mirrorX: true);
 
             foreach (var dot in dots)
             {
@@ -293,7 +296,7 @@ namespace BraillePrinter
                     Height = dotRadius * 2,
                     Fill = Brushes.DimGray,
                 };
-                Canvas.SetLeft(ellipse, dot.X * scale - dotRadius);
+                Canvas.SetLeft(ellipse, (p.PaperWidth - dot.X) * scale - dotRadius);
                 Canvas.SetTop(ellipse, dot.Y * scale - dotRadius);
                 PathCanvas.Children.Add(ellipse);
             }
@@ -303,12 +306,12 @@ namespace BraillePrinter
 
             var pathBrush = new SolidColorBrush(Color.FromArgb(140, 220, 50, 50));
 
-            double prevX = zigzag[0].X * scale;
+            double prevX = (p.PaperWidth - zigzag[0].X) * scale;
             double prevY = zigzag[0].Y * scale;
 
             for (int i = 1; i < zigzag.Count; i++)
             {
-                double cx = zigzag[i].X * scale;
+                double cx = (p.PaperWidth - zigzag[i].X) * scale;
                 double cy = zigzag[i].Y * scale;
 
                 PathCanvas.Children.Add(new Line

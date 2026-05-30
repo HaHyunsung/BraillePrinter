@@ -37,6 +37,9 @@ namespace BraillePrinter.Services
             return result;
         }
 
+        // 실제 찍히는 X는 용지 좌우가 반전되므로 G-Code 출력 시 X축 미러
+        private static double MirrorX(double dotX) => P.PaperWidth - dotX;
+
         public static List<string> Generate(IReadOnlyList<DotCoordinate> dots)
         {
             return P.PrintMode == PrintMode.ContinuousScan
@@ -60,7 +63,7 @@ namespace BraillePrinter.Services
 
             foreach (var dot in BuildZigzagOrder(dots))
             {
-                string x = (dot.X + P.OriginOffsetX).ToString("F3", CultureInfo.InvariantCulture);
+                string x = (MirrorX(dot.X) + P.OriginOffsetX).ToString("F3", CultureInfo.InvariantCulture);
                 string y = (dot.Y + P.OriginOffsetY).ToString("F3", CultureInfo.InvariantCulture);
 
                 lines.Add($"G0 X{x} Y{y} F{f}");
@@ -115,12 +118,12 @@ namespace BraillePrinter.Services
                 bool firstInRow = true;
                 foreach (var dot in sorted)
                 {
-                    double baseX = dot.X + P.OriginOffsetX;
+                    double baseX = MirrorX(dot.X) + P.OriginOffsetX;
                     double baseY = dot.Y + P.OriginOffsetY;
 
-                    // 이동 방향 기준으로 M3/M5 위치 계산
-                    double m3X = leftToRight ? baseX - m3Off : baseX + m3Off;
-                    double m5X = leftToRight ? baseX + m5Off : baseX - m5Off;
+                    // X 미러 후 paper leftToRight = machine rightToLeft → M3/M5 방향 반전
+                    double m3X = leftToRight ? baseX + m3Off : baseX - m3Off;
+                    double m5X = leftToRight ? baseX - m5Off : baseX + m5Off;
 
                     string m3Str = m3X.ToString("F3", CultureInfo.InvariantCulture);
                     string m5Str = m5X.ToString("F3", CultureInfo.InvariantCulture);
