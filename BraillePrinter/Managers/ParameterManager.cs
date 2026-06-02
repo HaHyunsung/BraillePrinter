@@ -7,17 +7,34 @@ namespace BraillePrinter.Managers
     /// <summary>
     /// 점자 출력 파라미터를 관리하는 싱글톤 매니저.
     /// 파라미터는 XML 파일로 저장·복원됩니다.
-    /// 저장 경로: %AppData%\BraillePrinter\parameters.xml
+    /// 저장 경로: &lt;저장소 루트&gt;\config\parameters.xml (Git으로 추적됨)
     /// </summary>
     public sealed class ParameterManager
     {
         // ── 저장 경로 ─────────────────────────────────────────────────────
-        private static readonly string ConfigDirectory =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                         "BraillePrinter");
+        // 실행 파일은 bin\Debug\... 에서 동작하므로, 저장소 루트(.git 또는
+        // .slnx 마커)를 거슬러 올라가 찾아 그 안의 config 폴더를 사용한다.
+        // 마커를 찾지 못하면 실행 파일 옆 config 폴더로 폴백한다.
+        private static readonly string ConfigDirectory = ResolveConfigDirectory();
 
         private static readonly string ConfigFilePath =
             Path.Combine(ConfigDirectory, "parameters.xml");
+
+        private static string ResolveConfigDirectory()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                bool isRepoRoot =
+                    Directory.Exists(Path.Combine(dir.FullName, ".git")) ||
+                    File.Exists(Path.Combine(dir.FullName, "BraillePrinter.slnx"));
+                if (isRepoRoot)
+                    return Path.Combine(dir.FullName, "config");
+                dir = dir.Parent;
+            }
+            // 폴백: 배포 환경 등 저장소 마커를 찾지 못한 경우
+            return Path.Combine(AppContext.BaseDirectory, "config");
+        }
 
         private static readonly XmlSerializer Serializer =
             new(typeof(BrailleParameters));

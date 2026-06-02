@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BrailleParameters xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <DotSpacing>2.5</DotSpacing>
+  <CellSpacing>6</CellSpacing>
+  <LineSpacing>10</LineSpacing>
+  <MarginLeft>10</MarginLeft>
+  <MarginTop>10</MarginTop>
+  <MarginRight>10</MarginRight>
+  <MarginBottom>10</MarginBottom>
+  <PaperWidth>210</PaperWidth>
+  <PaperHeight>297</PaperHeight>
+  <DisplayScale>3</DisplayScale>
+  <PrintMode>StopAndPunch</PrintMode>
+  <GCodeFeedRate>5000</GCodeFeedRate>
+  <GCodeDwellSeconds>0.5</GCodeDwellSeconds>
+  <RetractDwellSeconds>0.3</RetractDwellSeconds>
+  <ScanFeedRate>1000</ScanFeedRate>
+  <ScanM3OffsetMm>0.1</ScanM3OffsetMm>
+  <ScanM5OffsetMm>0.1</ScanM5OffsetMm>
+  <OriginOffsetX>235</OriginOffsetX>
+  <OriginOffsetY>10</OriginOffsetY>
+  <SolenoidInvert>false</SolenoidInvert>
+  <StepPulseUs>10</StepPulseUs>
+  <StepIdleDelayMs>255</StepIdleDelayMs>
+  <HardLimitsEnable>0</HardLimitsEnable>
+  <HomingEnable>1</HomingEnable>
+  <HomingDirMask>3</HomingDirMask>
+  <HomingFeedRate>25</HomingFeedRate>
+  <HomingSeekRate>1000</HomingSeekRate>
+  <HomingDebounce>250</HomingDebounce>
+  <HomingPullOff>1</HomingPullOff>
+  <StepsPerMmX>83</StepsPerMmX>
+  <StepsPerMmY>79</StepsPerMmY>
+  <MaxRateX>3000</MaxRateX>
+  <MaxRateY>3000</MaxRateY>
+  <AccelerationX>300</AccelerationX>
+  <AccelerationY>300</AccelerationY>
+  <MaxTravelX>220</MaxTravelX>
+  <MaxTravelY>310</MaxTravelY>
+  <DirectionInvert>2</DirectionInvert>
+  <LimitPinsInvert>0</LimitPinsInvert>
+  <ConverterType>LibLouis</ConverterType>
+  <LibLouisTable>ko-g2.ctb</LibLouisTable>
+</BrailleParameters>
