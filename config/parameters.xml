@@ -32,10 +32,10 @@
   <HomingPullOff>1</HomingPullOff>
   <StepsPerMmX>85</StepsPerMmX>
   <StepsPerMmY>85</StepsPerMmY>
-  <MaxRateX>5000</MaxRateX>
-  <MaxRateY>5000</MaxRateY>
-  <AccelerationX>500</AccelerationX>
-  <AccelerationY>500</AccelerationY>
+  <MaxRateX>3000</MaxRateX>
+  <MaxRateY>3000</MaxRateY>
+  <AccelerationX>300</AccelerationX>
+  <AccelerationY>300</AccelerationY>
   <MaxTravelX>220</MaxTravelX>
   <MaxTravelY>310</MaxTravelY>
   <DirectionInvert>2</DirectionInvert>
