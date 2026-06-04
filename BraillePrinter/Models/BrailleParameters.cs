@@ -66,6 +66,9 @@ namespace BraillePrinter.Models
         /// <summary>급속이동 속도 (mm/min) — G0 F 값</summary>
         [XmlElement] public double GCodeFeedRate { get; set; } = 3000.0;
 
+        /// <summary>축 안정화 대기 시간 (초) — G0 급속 이동 후 M3(핀 ON) 전 G4 P 값. 0이면 생략.</summary>
+        [XmlElement] public double SettleDwellSeconds { get; set; } = 0.0;
+
         /// <summary>핀 내려찍기 유지 시간 (초) — M3 후 G4 P 값 (XML 하위 호환: GCodeDwellSeconds)</summary>
         [XmlElement("GCodeDwellSeconds")] public double PunchDwellSeconds { get; set; } = 0.5;
 

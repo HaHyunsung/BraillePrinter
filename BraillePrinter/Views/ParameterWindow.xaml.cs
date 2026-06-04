@@ -34,6 +34,7 @@ namespace BraillePrinter.Views
             TbPaperHeight.Text  = p.PaperHeight.ToString("F2");
             TbDisplayScale.Text  = p.DisplayScale.ToString("F2");
             TbFeedRate.Text      = p.GCodeFeedRate.ToString("F0");
+            TbSettleDwell.Text   = p.SettleDwellSeconds.ToString("F2");
             TbPunchDwell.Text    = p.PunchDwellSeconds.ToString("F2");
             TbRetractDwell.Text  = p.RetractDwellSeconds.ToString("F2");
 
@@ -108,7 +109,7 @@ namespace BraillePrinter.Views
                 TbDotSpacing, TbCellSpacing, TbLineSpacing,
                 TbMarginLeft, TbMarginTop, TbMarginRight, TbMarginBottom,
                 TbPaperWidth, TbPaperHeight, TbDisplayScale,
-                TbFeedRate, TbPunchDwell, TbRetractDwell,
+                TbFeedRate, TbSettleDwell, TbPunchDwell, TbRetractDwell,
                 TbScanFeedRate, TbScanM3Offset, TbScanM5Offset,
                 TbOriginOffsetX, TbOriginOffsetY
             })
@@ -218,6 +219,7 @@ namespace BraillePrinter.Views
             double paperHeight       = ParsePositive(TbPaperHeight.Text,      "용지 높이",              errors);
             double displayScale      = ParsePositive(TbDisplayScale.Text,     "표시 배율",              errors);
             double feedRate          = ParsePositive(TbFeedRate.Text,         "급속 이동 속도",          errors);
+            double settleDwell       = ParseNonNeg(TbSettleDwell.Text,        "축 안정화 대기",          errors);
             double punchDwell        = ParsePositive(TbPunchDwell.Text,       "핀 내려찍기 대기",        errors);
             double retractDwell      = ParseNonNeg(TbRetractDwell.Text,       "핀 복귀 대기",            errors);
             double scanFeedRate  = ParsePositive(TbScanFeedRate.Text,  "스캔 이동 속도",    errors);
@@ -293,6 +295,7 @@ namespace BraillePrinter.Views
                 DisplayScale            = displayScale,
                 PrintMode               = printMode,
                 GCodeFeedRate           = feedRate,
+                SettleDwellSeconds      = settleDwell,
                 PunchDwellSeconds       = punchDwell,
                 RetractDwellSeconds     = retractDwell,
                 ScanFeedRate    = scanFeedRate,

@@ -286,10 +286,12 @@ namespace BraillePrinter
             PathCanvas.Width = p.PaperWidth * scale;
             PathCanvas.Height = p.PaperHeight * scale;
 
-            // 실제 인쇄물(종이를 정상으로 읽는 면)과 동일한 방향으로 표시.
-            // 미러는 머신 좌표 생성 시에만 적용되고 종이에선 상쇄되므로 여기선 미러하지 않는다.
-            // → 인쇄 시작점(홈=용지 우측 상단 근처)이 화면 우측 상단(제일 우측 박스)에 보인다.
-            DrawCellGuides(p, scale, PathCanvas, mirrorX: false);
+            // 경로 미리보기는 '실제 기계 움직임'(후면 엠보싱 = 좌우 반전된 펀칭 면)을 보여준다.
+            // 점자 자체가 좌우 반전되고, 인쇄 시작점(홈=용지 우측 상단)이 화면 우측 상단에 온다.
+            // 화면 X = (PaperWidth − dot.X) * scale 로 용지 중심 기준 좌우 반전.
+            DrawCellGuides(p, scale, PathCanvas, mirrorX: true);
+
+            double MirrorScreenX(double dotX) => (p.PaperWidth - dotX) * scale;
 
             foreach (var dot in dots)
             {
@@ -299,7 +301,7 @@ namespace BraillePrinter
                     Height = dotRadius * 2,
                     Fill = Brushes.DimGray,
                 };
-                Canvas.SetLeft(ellipse, dot.X * scale - dotRadius);
+                Canvas.SetLeft(ellipse, MirrorScreenX(dot.X) - dotRadius);
                 Canvas.SetTop(ellipse, dot.Y * scale - dotRadius);
                 PathCanvas.Children.Add(ellipse);
             }
@@ -309,12 +311,12 @@ namespace BraillePrinter
 
             var pathBrush = new SolidColorBrush(Color.FromArgb(140, 220, 50, 50));
 
-            double prevX = zigzag[0].X * scale;
+            double prevX = MirrorScreenX(zigzag[0].X);
             double prevY = zigzag[0].Y * scale;
 
             for (int i = 1; i < zigzag.Count; i++)
             {
-                double cx = zigzag[i].X * scale;
+                double cx = MirrorScreenX(zigzag[i].X);
                 double cy = zigzag[i].Y * scale;
 
                 PathCanvas.Children.Add(new Line

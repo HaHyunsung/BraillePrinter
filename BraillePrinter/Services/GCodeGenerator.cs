@@ -22,9 +22,9 @@ namespace BraillePrinter.Services
                            .ToList();
 
             var result = new List<DotCoordinate>();
-            // 홈(용지 우측 상단=작은 머신 X)에서 시작하도록 첫 행을 용지 우측부터(paper X 내림차순) 출발.
-            // → 헤드가 홈에서 여백만큼만 이동해 인쇄 시작 (X·Y 통일), 이후 +X로 가로 진행.
-            bool leftToRight = false;
+            // 미러 후 머신 X = OriginOffsetX − dotX 이므로, 홈(머신 최대 X)은 dot.X가 가장 작은 쪽(읽기 좌측).
+            // 홈에서 바로 시작하도록 첫 행을 dot.X 오름차순(=머신 X 내림차순)으로 출발, 이후 행마다 교대.
+            bool leftToRight = true;
 
             foreach (var row in rows)
             {
@@ -39,10 +39,12 @@ namespace BraillePrinter.Services
             return result;
         }
 
-        // 홈 = 용지 우측 상단 코너(머신 X0), 종이는 홈에서 −X(왼쪽) 방향에 위치.
-        // 용지 우측 끝(dot.X=PaperWidth)이 머신 X0, 좌측으로 갈수록 X가 음수로 감소.
-        // → 우측 글자(머신 X≈0)부터 시작해 X 감소(−)하며 왼쪽으로 찍음 (앞면에서 정상 판독).
-        private static double MirrorX(double dotX) => dotX - P.PaperWidth;
+        // 후면 엠보싱: 종이를 뒤집어 읽으므로 점자를 좌우 반전해서 찍어야 한다.
+        // 읽기 좌표(dotX, 좌=0)를 부호 반전하면 ① 셀 순서와 ② 셀 내 점 좌/우 열이
+        // 한 번에 뒤집힌다. 여기에 OriginOffsetX(홈=용지 우측, 머신 원점)를 더해 머신 X로 변환:
+        //   machX = MirrorX(dotX) + OriginOffsetX = OriginOffsetX − dotX
+        // → dotX=0(읽기 좌측/첫 글자)이 machX=OriginOffsetX(홈, 우측)에 위치 → 홈에서 바로 시작.
+        private static double MirrorX(double dotX) => -dotX;
 
         // 대기 위치 = 용지 우측 상단 코너(원점 오프셋 지점, 여백 제외).
         // 홈 직후·작업 종료 후 여기로 이동해 대기. 여백은 인쇄 G-Code 첫 이동이 처리한다.
@@ -67,20 +69,32 @@ namespace BraillePrinter.Services
             lines.Add("G21");
 
             string f            = P.GCodeFeedRate.ToString("F0", CultureInfo.InvariantCulture);
+            string settleDwell  = P.SettleDwellSeconds.ToString("F2", CultureInfo.InvariantCulture);
+            // 행 전환(Y 이동) 직후는 가장 길고 빠른 이동이라 잔진동이 큼 → 안정화 대기 2배
+            string settleDwellY = (P.SettleDwellSeconds * 2).ToString("F2", CultureInfo.InvariantCulture);
             string punchDwell   = P.PunchDwellSeconds.ToString("F2", CultureInfo.InvariantCulture);
             string retractDwell = P.RetractDwellSeconds.ToString("F2", CultureInfo.InvariantCulture);
+
+            double? prevY = null;   // 직전 점의 Y (행 전환 감지용)
 
             foreach (var dot in BuildZigzagOrder(dots))
             {
                 string x = (MirrorX(dot.X) + P.OriginOffsetX).ToString("F3", CultureInfo.InvariantCulture);
                 string y = (dot.Y + P.OriginOffsetY).ToString("F3", CultureInfo.InvariantCulture);
 
+                // 첫 점이거나 Y가 바뀐 경우(행 전환) = Y 이동 후 → 2배 대기
+                bool yMoved = prevY is null || dot.Y != prevY.Value;
+
                 lines.Add($"G0 X{x} Y{y} F{f}");
+                if (P.SettleDwellSeconds > 0)
+                    lines.Add($"G4 P{(yMoved ? settleDwellY : settleDwell)}");   // 축 안정화 대기 (M3 전, Y 이동 시 2배)
                 lines.Add(PinOnCmd);
                 lines.Add($"G4 P{punchDwell}");
                 lines.Add(PinOffCmd);
                 if (P.RetractDwellSeconds > 0)
                     lines.Add($"G4 P{retractDwell}");
+
+                prevY = dot.Y;
             }
 
             // 작업 종료 후 대기 위치(용지 우측 상단 코너, 옵셋 지점)로 복귀
@@ -118,8 +132,9 @@ namespace BraillePrinter.Services
                            .OrderBy(g => g.Key)
                            .ToList();
 
-            // 홈(용지 우측=작은 머신 X)에서 시작하도록 첫 행을 용지 우측부터(paper X 내림차순) 출발
-            bool leftToRight = false;
+            // 미러 후 머신 X = OriginOffsetX − dotX. 홈(머신 최대 X)은 dot.X 최소(읽기 좌측).
+            // 홈에서 시작하도록 첫 행을 dot.X 오름차순(=머신 X 내림차순)으로 출발.
+            bool leftToRight = true;
             foreach (var row in rows)
             {
                 var sorted = leftToRight
@@ -132,9 +147,12 @@ namespace BraillePrinter.Services
                     double baseX = MirrorX(dot.X) + P.OriginOffsetX;
                     double baseY = dot.Y + P.OriginOffsetY;
 
-                    // leftToRight(paper 좌→우) = machine +X 이동, 반대는 −X 이동. 이동 방향 기준 M3/M5 위치
-                    double m3X = leftToRight ? baseX - m3Off : baseX + m3Off;
-                    double m5X = leftToRight ? baseX + m5Off : baseX - m5Off;
+                    // 미러로 인해 dot.X 오름차순(leftToRight=true)은 머신 X가 '감소'(−X 이동)한다.
+                    // 이동 방향 기준으로 M3(앞)·M5(뒤) 위치를 잡으므로 머신 X 부호로 계산:
+                    //   −X 이동(leftToRight): M3는 더 큰 X(앞), M5는 더 작은 X(뒤)
+                    //   +X 이동(!leftToRight): 반대
+                    double m3X = leftToRight ? baseX + m3Off : baseX - m3Off;
+                    double m5X = leftToRight ? baseX - m5Off : baseX + m5Off;
 
                     string m3Str = m3X.ToString("F3", CultureInfo.InvariantCulture);
                     string m5Str = m5X.ToString("F3", CultureInfo.InvariantCulture);
@@ -183,7 +201,7 @@ namespace BraillePrinter.Services
             var ordered = BuildZigzagOrder(dots);
 
             double? prevY = null;
-            bool leftToRight = false;
+            bool leftToRight = true;
 
             for (int i = 0; i < ordered.Count; i++)
             {
@@ -192,7 +210,7 @@ namespace BraillePrinter.Services
                 if (prevY == null || Math.Abs(d.Y - prevY.Value) > 0.01)
                 {
                     if (prevY != null) leftToRight = !leftToRight;
-                    else leftToRight = false;
+                    else leftToRight = true;
                     prevY = d.Y;
                 }
 

@@ -157,6 +157,9 @@ namespace BraillePrinter.Managers
             double padX     = (p.CellSpacing - dotAreaW) / 2.0;  // 수평 여백 = (6.0-2.5)/2 = 1.75mm
             double padY     = (p.LineSpacing - dotAreaH) / 2.0;  // 수직 여백 = (10.0-5.0)/2 = 2.5mm
 
+            // 좌표는 '읽는 면'(종이를 정상으로 읽는 방향) 기준으로 계산한다.
+            // col 0 = 좌측 끝, 좌→우로 채움(왼쪽 정렬). 메인 점자 미리보기는 이 좌표를 그대로 표시.
+            // 좌우 반전(후면 엠보싱)은 G-Code/경로 미리보기 단계에서만 적용한다.
             foreach (var cell in cells)
             {
             // 셀 기준점 (용지 좌상단 기준 절대 mm 좌표)

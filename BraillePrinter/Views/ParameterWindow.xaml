@@ -209,6 +209,14 @@
                     <TextBlock Style="{StaticResource RangeLabel}" Text="권장: 1000 ~ 5000"/>
                 </StackPanel>
 
+                <!-- 축 안정화 대기 시간 (M3 전) -->
+                <StackPanel Orientation="Horizontal" Margin="0,4">
+                    <TextBlock Style="{StaticResource ParamLabel}" Text="축 안정화 대기 (M3 전)"/>
+                    <TextBox x:Name="TbSettleDwell" Style="{StaticResource ParamTextBox}"/>
+                    <TextBlock Style="{StaticResource UnitLabel}" Text="초"/>
+                    <TextBlock Style="{StaticResource RangeLabel}" Text="0이면 생략. 권장: 0.05 ~ 0.3"/>
+                </StackPanel>
+
                 <!-- 핀 내려찍기 유지 시간 -->
                 <StackPanel Orientation="Horizontal" Margin="0,4">
                     <TextBlock Style="{StaticResource ParamLabel}" Text="핀 내려찍기 대기 (M3 후)"/>
