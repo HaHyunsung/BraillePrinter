@@ -11,7 +11,7 @@
   <PaperHeight>272</PaperHeight>
   <DisplayScale>3</DisplayScale>
   <PrintMode>StopAndPunch</PrintMode>
-  <GCodeFeedRate>5000</GCodeFeedRate>
+  <GCodeFeedRate>7000</GCodeFeedRate>
   <SettleDwellSeconds>0</SettleDwellSeconds>
   <GCodeDwellSeconds>0.05</GCodeDwellSeconds>
   <RetractDwellSeconds>0.05</RetractDwellSeconds>
@@ -34,8 +34,8 @@
   <StepsPerMmY>85</StepsPerMmY>
   <MaxRateX>10000</MaxRateX>
   <MaxRateY>10000</MaxRateY>
-  <AccelerationX>1500</AccelerationX>
-  <AccelerationY>1500</AccelerationY>
+  <AccelerationX>5000</AccelerationX>
+  <AccelerationY>5000</AccelerationY>
   <MaxTravelX>220</MaxTravelX>
   <MaxTravelY>310</MaxTravelY>
   <DirectionInvert>2</DirectionInvert>
